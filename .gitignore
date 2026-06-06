@@ -1,0 +1,22 @@
+uv.lock
+.idea/
+
+.coverage
+
+*.DS_Store
+
+# Python / uv / build
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+
+# Generator output
+*.zip
+object/
+test/
+images/
+*.parkobj
+*.sprites.json
+*.subpositions.json

@@ -1,0 +1,25 @@
+# Vertical-slice demo: one tile mesh bent along six representative sections.
+# Run from the project root:
+#   openrct2-track-generator --test examples/demo_track.yaml
+#   openrct2-track-generator examples/demo_track.yaml
+id: "alexparisi.track.demo_coaster"
+name: "Demo Coaster Track"
+description: "Vertical-slice track sprites"
+authors:
+  - "Alex Parisi"
+version: "1.0"
+ride_type: "steel_roller_coaster"   # provisional — see exporter TRACK_OBJECT_TYPE note
+units_per_tile: 3.3
+flat_shaded: false
+
+meshes:
+  - "examples/meshes/track_tile.obj"
+track_mesh_index: 0
+
+sections:
+  - flat
+  - flat_to_gentle
+  - gentle
+  - gentle_to_steep
+  - steep
+  - small_turn_left
