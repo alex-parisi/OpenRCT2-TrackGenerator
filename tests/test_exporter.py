@@ -66,6 +66,12 @@ def test_no_mask_mesh_collapses_split(tmp_path):
     assert expected_sprite_count(track) == 4
 
 
+def test_has_lift_expands_flat_to_four(tmp_path):
+    # With a lift hill, flat's 2 views become 4 (one chain direction each).
+    assert expected_sprite_count(_build(tmp_path, sections=["flat"])) == 2
+    assert expected_sprite_count(_build(tmp_path, sections=["flat"], flags=["has_lift"])) == 4
+
+
 def test_export_track_writes_manifest_pngs_and_sidecar(tmp_path):
     track = _build(tmp_path)
     out = tmp_path / "dist"

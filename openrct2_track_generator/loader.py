@@ -2,12 +2,12 @@
 Load a track config (JSON or YAML) into a Track dataclass.
 """
 
+import math
 from pathlib import Path
 from typing import Any
 
 from openrct2_object_common.config import (
     LoadError,
-    load_meshes,
     load_preview,
     optional_bool,
     optional_int,
@@ -17,12 +17,32 @@ from openrct2_object_common.config import (
     parse_config,
     require_string,
 )
-from openrct2_x7_renderer.mesh import Mesh
+from openrct2_x7_renderer.geometry import rotate_y
+from openrct2_x7_renderer.mesh import Mesh, load_mesh
 from openrct2_x7_renderer.types import IndexedImage
 
 from .constants import TILE_SIZE
 from .sections import resolve_section
 from .types import Track
+
+# maketrack's load_model applies rotate_y(-90deg) to every track mesh, so meshes are
+# authored with +X along the track (and Z across, centred). Our deform expects +Z
+# along-track, which this rotation produces: (x, y, z) -> (-z, y, x).
+_MESH_LOAD_TRANSFORM = rotate_y(-0.5 * math.pi)
+
+
+def load_track_meshes(root: dict[str, Any], base_dir: Path | None = None) -> list[Mesh]:
+    """Load the config's ``meshes`` with maketrack's along-track (+X) load rotation."""
+    mesh_paths = root.get("meshes")
+    if not isinstance(mesh_paths, list):
+        raise LoadError('Property "meshes" does not exist or is not an array')
+    meshes: list[Mesh] = []
+    for path in mesh_paths:
+        if not isinstance(path, str):
+            raise LoadError("Mesh path is not a string")
+        resolved = Path(path) if base_dir is None or Path(path).is_absolute() else base_dir / path
+        meshes.append(load_mesh(resolved, transform=_MESH_LOAD_TRANSFORM))
+    return meshes
 
 
 def _build_sections(root: dict[str, Any]) -> list[Any]:
@@ -67,6 +87,7 @@ def build_track(
 
     track.flat_shaded = optional_bool(root, "flat_shaded", False)
     track.z_offset = optional_number(root, "z_offset", 0.0)
+    track.has_lift = "has_lift" in optional_string_list(root, "flags")
 
     track.meshes = list(meshes)
     track.track_mesh_index = optional_int(root, "track_mesh_index", 0)
@@ -94,4 +115,4 @@ def build_track(
 def load_track(json_path: Path | str) -> Track:
     """Parse a config file, load its meshes + preview from disk, build a Track."""
     root = parse_config(json_path)
-    return build_track(root, load_meshes(root), load_preview(root))
+    return build_track(root, load_track_meshes(root), load_preview(root))

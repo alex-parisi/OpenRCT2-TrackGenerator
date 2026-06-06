@@ -16,16 +16,18 @@ from openrct2_x7_renderer.mesh import Mesh
 from openrct2_x7_renderer.ray_trace import VIEWS, Context, FinalizedScene
 from openrct2_x7_renderer.types import IndexedImage
 
-from .constants import CLEARANCE_HEIGHT, TILE_SIZE
+from .constants import CLEARANCE_HEIGHT, TILE_SIZE, TrackFlag
 from .deform import deform_mesh
+from .lift import CHAIN_PATTERNS, ChainPattern, apply_lift
 from .masks import ViewMask, carve
 from .types import Track, TrackSection
 
-__all__ = ["render_section"]
+__all__ = ["angle_plan", "render_section"]
 
 _IDENTITY = np.eye(3, dtype=np.float64)
 _ORIGIN = np.zeros(3, dtype=np.float64)
 _GHOST = int(MeshFlag.GHOST)
+_MASK = int(MeshFlag.MASK)
 
 
 def _section_layout(mesh: Mesh, section: TrackSection) -> tuple[int, float, float]:
@@ -55,22 +57,33 @@ def _build_scene(
     flat_shaded: bool,
     is_mask: bool,
     z_offset: float,
+    occluder: Mesh | None = None,
 ) -> FinalizedScene:
     """Tile ``mesh`` along the section with ghost end-caps + extrude/mask_end handling.
 
     ``is_mask`` builds the occlusion silhouette: every copy (incl. end-caps) is drawn so
     the silhouette covers the neighbours; for the visible render the end-caps and the
-    ``mask_end`` final tile are ghosts.
+    ``mask_end`` final tile are ghosts. For the silhouette, the track ``occluder`` mesh is
+    added on each drawn tile as a ``MeshFlag.MASK`` occluder (``track.cpp`` adds the track
+    mesh with the track-mask flag alongside the mask plate), so where the rail sits *in
+    front of* the mask plate it punches it out of the silhouette — essential for the
+    self-overlapping inverted pieces. End-caps stay mask-plate only.
     """
     num, scale, length = _section_layout(mesh, section)
     builder = context.begin_render()
 
-    def add(offset: float, flag: int) -> None:
+    def add(offset: float, flag: int, *, with_occluder: bool = False) -> None:
         copy = deform_mesh(
             mesh, section, scale=scale, offset=offset, track_length=section.length,
             z_offset=z_offset, flat_shaded=flat_shaded,
         )
         builder.add_model(copy, _IDENTITY, _ORIGIN, flag)
+        if with_occluder and occluder is not None:
+            occ = deform_mesh(
+                occluder, section, scale=scale, offset=offset, track_length=section.length,
+                z_offset=z_offset, flat_shaded=flat_shaded,
+            )
+            builder.add_model(occ, _IDENTITY, _ORIGIN, _MASK)
 
     # Ghost end-caps one tile before/after (drawn for the silhouette so it spans neighbours).
     if is_mask or not view_mask.extrude_behind:
@@ -84,15 +97,34 @@ def _build_scene(
     for i in range(count):
         offset = (i - (1 if view_mask.extrude_behind else 0)) * length
         ghost_last = (not is_mask) and view_mask.mask_end and (i + 1 == count)
-        add(offset, _GHOST if ghost_last else 0)
+        add(offset, _GHOST if ghost_last else 0, with_occluder=is_mask)
 
     return builder.finalize()
+
+
+def angle_plan(
+    track: Track, section: TrackSection, view_masks: list[ViewMask]
+) -> list[tuple[int, ViewMask, ChainPattern | None]]:
+    """The per-angle render plan: ``(view-direction, mask, chain-stamp-or-None)``.
+
+    Normally one angle per mask entry. A lift hill emits all four directions for *every*
+    section (maketrack's view loop expands under lift regardless of chain) — a section
+    with fewer masks than four reuses ``view_masks[angle % len]``, so a 2-view flat or
+    S-bend becomes 4 sprites. The chain stamp is overlaid per direction only when the
+    section actually has one.
+    """
+    chain = CHAIN_PATTERNS[section.chain] if (track.has_lift and section.chain) else None
+    num_angles = 4 if track.has_lift else len(view_masks)
+    return [
+        (angle, view_masks[angle % len(view_masks)], chain[angle] if chain is not None else None)
+        for angle in range(num_angles)
+    ]
 
 
 def render_section(
     track: Track, section: TrackSection, context: Context, view_masks: list[ViewMask]
 ) -> list[IndexedImage]:
-    """Render+carve a section, one view per entry in ``view_masks`` (view-major sprites)."""
+    """Render+carve a section per its :func:`angle_plan` (angle-major sub-sprites)."""
     track_mesh = track.meshes[track.track_mesh_index]
     images: list[IndexedImage] = []
 
@@ -100,13 +132,19 @@ def render_section(
     # plus any per-section adjustment.
     z_offset = (track.z_offset / 8.0) * CLEARANCE_HEIGHT + section.z_offset
 
-    for angle, view_mask in enumerate(view_masks):
+    # OFFSET_SPRITE_MASK nudges the mask-layer sampling by (z_offset - 8) px (track.cpp);
+    # z_offset there is the integer-rounded config value. The silhouette is not shifted.
+    z_offset_int = int(track.z_offset + 0.499999)
+    mask_dy = (z_offset_int - 8) if (section.flags & TrackFlag.OFFSET_SPRITE_MASK) else 0
+
+    for angle, view_mask, chain in angle_plan(track, section, view_masks):
         silhouette: IndexedImage | None = None
         if track.mask_mesh_index >= 0 and view_mask.needs_silhouette:
             mask_mesh = track.meshes[track.mask_mesh_index]
             sil_scene = _build_scene(
                 context, mask_mesh, section, view_mask,
                 flat_shaded=track.flat_shaded, is_mask=True, z_offset=z_offset,
+                occluder=track_mesh,
             )
             try:
                 silhouette = sil_scene.render_silhouette(VIEWS[angle])
@@ -122,5 +160,8 @@ def render_section(
         finally:
             scene.end_render()
 
-        images.extend(carve(full, view_mask, silhouette))
+        subs = carve(full, view_mask, silhouette, mask_dy)
+        if chain is not None:
+            subs = [apply_lift(s, chain) for s in subs]
+        images.extend(subs)
     return images

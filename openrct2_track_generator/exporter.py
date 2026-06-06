@@ -23,7 +23,7 @@ from openrct2_x7_renderer.image import write_png
 from openrct2_x7_renderer.ray_trace import Context
 
 from .masks import ViewMask, load_section_masks
-from .section_renderer import render_section
+from .section_renderer import angle_plan, render_section
 from .subpositions import build_subposition_data
 from .types import Track, TrackSection
 
@@ -41,21 +41,23 @@ def _section_view_masks(track: Track, section: TrackSection) -> list[ViewMask]:
     )
 
 
-def _sprite_names(section: TrackSection, view_masks: list[ViewMask]) -> list[str]:
-    """Sprite filenames for a section, in view-major then sub-sprite order."""
+def _sprite_names(track: Track, section: TrackSection, view_masks: list[ViewMask]) -> list[str]:
+    """Sprite filenames for a section, in angle-major then sub-sprite order."""
     return [
-        f"{section.name}_{view}_{sub}"
-        for view, view_mask in enumerate(view_masks)
+        f"{section.name}_{angle}_{sub}"
+        for angle, view_mask, _chain in angle_plan(track, section, view_masks)
         for sub in range(len(view_mask.masks))
     ]
 
 
 def expected_sprite_count(track: Track) -> int:
-    """How many sprites ``export_track`` will write (sum of every view's sub-sprites)."""
+    """How many sprites ``export_track`` will write (sum over the per-angle plan)."""
     return sum(
         len(view_mask.masks)
         for section in track.sections
-        for view_mask in _section_view_masks(track, section)
+        for _angle, view_mask, _chain in angle_plan(
+            track, section, _section_view_masks(track, section)
+        )
     )
 
 
@@ -67,7 +69,7 @@ def _render_sprites(track: Track, context: Context, images_dir: Path) -> list[di
         log.info("Rendering track section %s", section.name)
         view_masks = _section_view_masks(track, section)
         images = render_section(track, section, context, view_masks)
-        names = _sprite_names(section, view_masks)
+        names = _sprite_names(track, section, view_masks)
         for name, image in zip(names, images, strict=True):
             filename = f"{name}.png"
             write_png(image, images_dir / filename)

@@ -4,7 +4,7 @@ import json
 
 import pytest
 from openrct2_object_common.config import LoadError
-from openrct2_track_generator.loader import build_track, load_track
+from openrct2_track_generator.loader import build_track, load_track, load_track_meshes
 from openrct2_x7_renderer.mesh import Mesh
 
 
@@ -93,6 +93,11 @@ def test_z_offset_optional_and_read():
     assert build_track(_config(z_offset=3), _meshes()).z_offset == 3.0
 
 
+def test_has_lift_from_flags():
+    assert build_track(_config(), _meshes()).has_lift is False
+    assert build_track(_config(flags=["has_lift"]), _meshes()).has_lift is True
+
+
 def test_version_override():
     track = build_track(_config(version="2.0"), _meshes())
     assert track.version == "2.0"
@@ -111,3 +116,19 @@ def test_load_track_from_disk(tmp_path):
     assert track.id == "test.track.x"
     assert len(track.meshes) == 1
     assert [s.name for s in track.sections] == ["flat", "gentle"]
+
+
+def test_load_track_meshes_applies_along_track_rotation(tmp_path):
+    # A vertex on +X (maketrack along-track) rotates to +Z (our deform's along-track).
+    (tmp_path / "m.obj").write_text("v 1 0 0\nv 0 0 0\nv 0 1 0\nf 1 2 3\n")
+    meshes = load_track_meshes({"meshes": [str(tmp_path / "m.obj")]})
+    v = meshes[0].vertices
+    # rotate_y(-90): (1,0,0) -> (0,0,1)
+    assert abs(v[0, 2] - 1.0) < 1e-5 and abs(v[0, 0]) < 1e-5
+
+
+def test_load_track_meshes_validates():
+    with pytest.raises(LoadError, match="meshes"):
+        load_track_meshes({})
+    with pytest.raises(LoadError, match="Mesh path"):
+        load_track_meshes({"meshes": [123]})

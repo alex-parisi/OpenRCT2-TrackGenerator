@@ -1,34 +1,35 @@
-# One tile-length track segment, authored straight along +Z (z in [0, 3.3]).
-# x is across-track, y is up. The generator deforms this along each section curve.
-# Faces are wound CCW as seen from above so the +Y normal is consistent.
+# One tile-length track segment in maketrack's mesh convention: +X is along-track
+# (x in [0, 3.3]), Z is across-track (centred), Y is up. The loader applies
+# rotate_y(-90deg) so the deform receives it as +Z along-track. Faces wound CCW from
+# above for a consistent +Y normal.
 mtllib track_tile.mtl
 o track_tile
 
 # deck (y = 0)
-v -0.60 0.00 0.00
-v 0.60 0.00 0.00
-v 0.60 0.00 3.30
-v -0.60 0.00 3.30
+v 0.00 0.00 0.60
+v 0.00 0.00 -0.60
+v 3.30 0.00 -0.60
+v 3.30 0.00 0.60
 # left rail top (y = 0.15)
-v -0.55 0.15 0.00
-v -0.45 0.15 0.00
-v -0.45 0.15 3.30
-v -0.55 0.15 3.30
+v 0.00 0.15 0.55
+v 0.00 0.15 0.45
+v 3.30 0.15 0.45
+v 3.30 0.15 0.55
 # right rail top (y = 0.15)
-v 0.45 0.15 0.00
-v 0.55 0.15 0.00
-v 0.55 0.15 3.30
-v 0.45 0.15 3.30
-# cross-tie 1 (z 0.7..0.9, y = 0.05)
-v -0.60 0.05 0.70
-v 0.60 0.05 0.70
-v 0.60 0.05 0.90
-v -0.60 0.05 0.90
-# cross-tie 2 (z 2.4..2.6, y = 0.05)
-v -0.60 0.05 2.40
-v 0.60 0.05 2.40
-v 0.60 0.05 2.60
-v -0.60 0.05 2.60
+v 0.00 0.15 -0.45
+v 0.00 0.15 -0.55
+v 3.30 0.15 -0.55
+v 3.30 0.15 -0.45
+# cross-tie 1 (x 0.7..0.9, y = 0.05)
+v 0.70 0.05 0.60
+v 0.70 0.05 -0.60
+v 0.90 0.05 -0.60
+v 0.90 0.05 0.60
+# cross-tie 2 (x 2.4..2.6, y = 0.05)
+v 2.40 0.05 0.60
+v 2.40 0.05 -0.60
+v 2.60 0.05 -0.60
+v 2.60 0.05 0.60
 
 vn 0.0 1.0 0.0
 

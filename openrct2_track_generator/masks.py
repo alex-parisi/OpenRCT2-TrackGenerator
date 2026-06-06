@@ -184,6 +184,13 @@ def load_section_masks(
     views: list[ViewMask] = []
     for entry in data[section_name]:
         primary, secondary, origin = _load_mask_png(masks_path.parent / entry["mask"])
+        if entry.get("mirror"):
+            # Reflect the mask about its origin column (right-hand pieces reuse the
+            # left mask mirrored); flipping the array + moving the origin keeps the
+            # carve's sampling aligned. (mask.cpp add_rect mirror branch.)
+            primary = np.fliplr(primary).copy()
+            secondary = np.fliplr(secondary).copy()
+            origin = (primary.shape[1] - 1 - origin[0], origin[1])
         offsets = [(int(x), int(y)) for x, y in entry.get("offset", [])]
         masks = _build_output_masks(
             primary,
@@ -224,15 +231,20 @@ def _crop(x_off: int, y_off: int, pixels: NDArray[np.uint8]) -> IndexedImage:
 
 
 def _sample_layer(
-    layer: NDArray[np.uint8], origin: tuple[int, int], full: IndexedImage
+    layer: NDArray[np.uint8], origin: tuple[int, int], full: IndexedImage, dy: int = 0
 ) -> NDArray[np.uint8]:
-    """Edge-clamp sample a mask layer onto the full sprite's pixel grid."""
+    """Edge-clamp sample a mask layer onto the full sprite's pixel grid.
+
+    ``dy`` shifts the mask-layer sampling vertically (``OFFSET_SPRITE_MASK``'s
+    ``z_offset - 8`` nudge in ``track.cpp``); the track-mask silhouette is *not*
+    shifted, matching the engine.
+    """
     ox, oy = origin
     mh, mw = layer.shape
     cols = np.arange(full.pixels.shape[1])[None, :]
     rows = np.arange(full.pixels.shape[0])[:, None]
     mx = np.clip(cols + full.x_offset + ox, 0, mw - 1)
-    my = np.clip(rows + full.y_offset + oy, 0, mh - 1)
+    my = np.clip(rows + full.y_offset + oy + dy, 0, mh - 1)
     sampled: NDArray[np.uint8] = layer[my, mx]
     return sampled
 
@@ -252,7 +264,10 @@ def _in_silhouette(silhouette: IndexedImage, full: IndexedImage) -> NDArray[np.b
 
 
 def carve(
-    full: IndexedImage, view_mask: ViewMask, silhouette: IndexedImage | None = None
+    full: IndexedImage,
+    view_mask: ViewMask,
+    silhouette: IndexedImage | None = None,
+    mask_dy: int = 0,
 ) -> list[IndexedImage]:
     """Carve a full render into its sub-sprites using ``view_mask`` (+ ``silhouette`` for ops).
 
@@ -261,8 +276,8 @@ def carve(
     with the silhouette (DIFFERENCE=behind, INTERSECT=front, TRANSFER_NEXT pulls the next
     region's silhouette-covered pixels in).
     """
-    prim = _sample_layer(view_mask.primary, view_mask.origin, full)
-    sec = _sample_layer(view_mask.secondary, view_mask.origin, full)
+    prim = _sample_layer(view_mask.primary, view_mask.origin, full, mask_dy)
+    sec = _sample_layer(view_mask.secondary, view_mask.origin, full, mask_dy)
     in_sil = _in_silhouette(silhouette, full) if silhouette is not None else None
 
     def region(m: OutputMask) -> NDArray[np.bool_]:

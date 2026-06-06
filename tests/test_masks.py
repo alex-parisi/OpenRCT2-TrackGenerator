@@ -75,6 +75,26 @@ def test_build_output_masks_transfer():
     assert masks[1].op is MaskOp.DIFFERENCE
 
 
+def test_mirror_flips_mask_about_origin(tmp_path):
+    import json
+
+    from PIL import Image
+
+    # 4-wide mask: sub-sprite 1 on the left two columns, origin at column 1.
+    # Pixel value = sub-sprite (low 3 bits); 0x40 marks the origin.
+    row = [1 | 0x40, 1, 0, 0]  # origin (0x40) at col 0
+    im = Image.fromarray(np.array([row], dtype=np.uint8), mode="P")
+    im.putpalette([c for i in range(256) for c in (i, i, i)])  # identity, preserves indices
+    im.save(tmp_path / "m.png")
+    (tmp_path / "j.json").write_text(
+        json.dumps({"flat": [{"mask": "m.png", "mirror": True}]})
+    )
+    (view,) = load_section_masks("flat", tmp_path / "j.json")
+    # fliplr turns [1,1,0,0] into [0,0,1,1]; the origin moves col 0 -> col 3.
+    assert view.primary.tolist() == [[0, 0, 1, 1]]
+    assert view.origin == (3, 0)
+
+
 def test_unknown_section_raises():
     with pytest.raises(KeyError, match="No masks defined"):
         load_section_masks("loop_de_loop")

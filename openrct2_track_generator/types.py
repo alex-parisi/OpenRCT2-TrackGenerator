@@ -60,6 +60,8 @@ class TrackSection:
     length: float
     flags: TrackFlag = TrackFlag.NONE
     z_offset: float = 0.0
+    # Lift-hill chain pattern name ("flat"/"gentle"), or None if the piece has no chain.
+    chain: str | None = None
 
 
 @dataclass
@@ -89,6 +91,10 @@ class Track:
 
     sections: list[TrackSection] = field(default_factory=list)
     flat_shaded: bool = False
+
+    # Lift hill: overlays the chain pattern and expands flat's 2 views to 4 (one per
+    # chain direction). Set from the config's ``flags`` list ("has_lift").
+    has_lift: bool = False
 
     # Per-track vertical offset in 1/8-clearance-height units (maketrack's track z_offset);
     # the deform shifts y by ``(z_offset / 8) * CLEARANCE_HEIGHT``.
