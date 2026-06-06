@@ -83,9 +83,19 @@ class Track:
     # as additional indices later without reshaping Track.
     meshes: list[Mesh] = field(default_factory=list)
     track_mesh_index: int = 0
+    # Separate solid occlusion-volume mesh for the track-mask silhouette (split/transfer
+    # front/behind sub-sprites). -1 = none, so occlusion ops are skipped.
+    mask_mesh_index: int = -1
 
     sections: list[TrackSection] = field(default_factory=list)
     flat_shaded: bool = False
+
+    # Per-track vertical offset in 1/8-clearance-height units (maketrack's track z_offset);
+    # the deform shifts y by ``(z_offset / 8) * CLEARANCE_HEIGHT``.
+    z_offset: float = 0.0
+
+    # Path to the masks JSON used to carve per-view sub-sprites; empty = bundled default.
+    masks_path: str = ""
 
     preview: IndexedImage | None = None
 

@@ -1,0 +1,146 @@
+{
+ "flat": [
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  }
+ ],
+ "flat_to_gentle": [
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  }
+ ],
+ "gentle": [
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  }
+ ],
+ "gentle_to_steep": [
+  {
+   "mask": "default/single_tile.png",
+   "mask_end": true
+  },
+  {
+   "mask": "default/single_tile.png",
+   "split": [
+    true
+   ]
+  },
+  {
+   "mask": "default/single_tile.png",
+   "split": [
+    true
+   ]
+  },
+  {
+   "mask": "default/single_tile.png",
+   "mask_end": true
+  }
+ ],
+ "steep": [
+  {
+   "mask": "default/single_tile.png",
+   "mask_end": true
+  },
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png"
+  },
+  {
+   "mask": "default/single_tile.png",
+   "mask_end": true
+  }
+ ],
+ "small_turn_left": [
+  {
+   "mask": "default/small_turn_left_0.png",
+   "offset": [
+    [
+     0,
+     0
+    ],
+    [
+     -32,
+     16
+    ],
+    [
+     0,
+     32
+    ]
+   ]
+  },
+  {
+   "mask": "default/small_turn_left_1.png",
+   "offset": [
+    [
+     0,
+     0
+    ],
+    [
+     -32,
+     -16
+    ],
+    [
+     -64,
+     0
+    ]
+   ]
+  },
+  {
+   "mask": "default/small_turn_left_2.png",
+   "offset": [
+    [
+     0,
+     0
+    ],
+    [
+     32,
+     -16
+    ],
+    [
+     0,
+     -32
+    ]
+   ]
+  },
+  {
+   "mask": "default/small_turn_left_3.png",
+   "offset": [
+    [
+     0,
+     0
+    ],
+    [
+     32,
+     16
+    ],
+    [
+     64,
+     0
+    ]
+   ]
+  }
+ ]
+}

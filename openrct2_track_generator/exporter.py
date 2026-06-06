@@ -5,13 +5,12 @@ OpenRCT2 has no "track" object type: track sprites are baked graphics referenced
 hardcoded global image indices, compiled from a sprite manifest via
 ``openrct2 sprite build <out.dat> <manifest.json>``. So — like the original RCTGen
 ``maketrack`` — this generator writes palette-indexed PNGs plus a manifest array of
-``{path, x, y, palette: "keep"}`` entries (the exact schema
-``createImageImportMetaFromJson`` parses), rather than a ``.parkobj``. Sprites are
-addressed by their order in the array, so the section/view emission order is the
-contract with whatever paint code consumes them.
+``{path, x, y, palette: "keep"}`` entries, rather than a ``.parkobj``.
 
-The deformation runs once per section; rendering and the manifest schema are otherwise
-the shared X7 path.
+Each section is deformed once, rendered per view, and carved into per-tile sub-sprites
+by that view's mask (``section_renderer`` / ``masks``). Sprites are emitted in
+section-major, view, then sub-sprite order — the manifest index order paint code
+consumes them by.
 """
 
 import json
@@ -21,41 +20,56 @@ from typing import Any
 
 from openrct2_object_common.parkobj import combine_indexed_images
 from openrct2_x7_renderer.image import write_png
-from openrct2_x7_renderer.ray_trace import VIEWS, Context
+from openrct2_x7_renderer.ray_trace import Context
 
+from .masks import ViewMask, load_section_masks
 from .section_renderer import render_section
 from .subpositions import build_subposition_data
-from .types import Track
+from .types import Track, TrackSection
 
 log = logging.getLogger(__name__)
 
-# Sprites rendered per section (the four cardinal park-view rotations).
-SPRITE_VIEWS = len(VIEWS)
-
-# Subdirectory (relative to the manifest) that the PNGs are written into; the
-# manifest's "path" values are resolved against the manifest's own directory by
-# `openrct2 sprite build`.
+# Subdirectory (relative to the manifest) the PNGs are written into; the manifest's
+# "path" values are resolved against the manifest's own directory by `sprite build`.
 IMAGES_DIRNAME = "images"
 
 
+def _section_view_masks(track: Track, section: TrackSection) -> list[ViewMask]:
+    # Occlusion ops (split/transfer front/behind) only apply with a mask mesh available.
+    return load_section_masks(
+        section.name, track.masks_path or None, occlusion=track.mask_mesh_index >= 0
+    )
+
+
+def _sprite_names(section: TrackSection, view_masks: list[ViewMask]) -> list[str]:
+    """Sprite filenames for a section, in view-major then sub-sprite order."""
+    return [
+        f"{section.name}_{view}_{sub}"
+        for view, view_mask in enumerate(view_masks)
+        for sub in range(len(view_mask.masks))
+    ]
+
+
 def expected_sprite_count(track: Track) -> int:
-    """How many sprites ``export_track`` will write for ``track``."""
-    return len(track.sections) * SPRITE_VIEWS
+    """How many sprites ``export_track`` will write (sum of every view's sub-sprites)."""
+    return sum(
+        len(view_mask.masks)
+        for section in track.sections
+        for view_mask in _section_view_masks(track, section)
+    )
 
 
 def _render_sprites(track: Track, context: Context, images_dir: Path) -> list[dict[str, Any]]:
-    """Render every section's views to PNGs and return the manifest entries.
-
-    Emission order is section-major, view-minor (``VIEWS[0..3]``); each sprite's
-    manifest index is its position in the returned list.
-    """
+    """Render+carve every section and return the manifest entries (in emission order)."""
     images_dir.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
     for section in track.sections:
         log.info("Rendering track section %s", section.name)
-        views = render_section(track, section, context)
-        for view_index, image in enumerate(views):
-            filename = f"{section.name}_{view_index + 1}.png"
+        view_masks = _section_view_masks(track, section)
+        images = render_section(track, section, context, view_masks)
+        names = _sprite_names(section, view_masks)
+        for name, image in zip(names, images, strict=True):
+            filename = f"{name}.png"
             write_png(image, images_dir / filename)
             manifest.append(
                 {
@@ -84,11 +98,11 @@ def export_track(
 ) -> None:
     """Render the track's sprites + manifest into ``output_directory``.
 
-    Writes ``<output>/images/<section>_<view>.png`` (palette-indexed), a
+    Writes ``<output>/images/<section>_<view>_<sub>.png`` (palette-indexed), a
     ``<output>/<id>.sprites.json`` manifest for ``openrct2 sprite build``, and the
-    ``<id>.subpositions.json`` sidecar. ``skip_render`` is a no-op for tracks: there
-    is no separate packaging step to repeat, and the manifest's draw offsets can only
-    be recovered by rendering, so a prior run's outputs are simply left in place.
+    ``<id>.subpositions.json`` sidecar. ``skip_render`` is a no-op for tracks: there is
+    no separate packaging step to repeat, and the manifest's draw offsets can only be
+    recovered by rendering, so a prior run's outputs are simply left in place.
     """
     output_directory = Path(output_directory)
     if skip_render:
@@ -106,16 +120,16 @@ def export_track(
 
 
 def export_track_test(track: Track, context: Context, test_dir: Path | str = "test") -> None:
-    """Four-direction render for fast iteration.
+    """Per-section preview for fast iteration.
 
-    Renders each section at the four park-view rotations and tiles them into one 2x2
-    preview per section, so the test sprite shows every direction the piece is drawn
-    at. This is the fastest way to validate the deformation and the render-space axis
-    mapping before a full export.
+    Renders+carves each section and tiles all its sub-sprites into one preview image,
+    so the test sprite shows every view/tile the section produces. The fastest way to
+    validate the deformation, the axis mapping, and the mask carve.
     """
     test_dir = Path(test_dir)
     test_dir.mkdir(parents=True, exist_ok=True)
     for section in track.sections:
         log.info("Rendering track section %s", section.name)
-        views = render_section(track, section, context)
-        write_png(combine_indexed_images(views, columns=2), test_dir / f"{section.name}.png")
+        view_masks = _section_view_masks(track, section)
+        images = render_section(track, section, context, view_masks)
+        write_png(combine_indexed_images(images, columns=2), test_dir / f"{section.name}.png")

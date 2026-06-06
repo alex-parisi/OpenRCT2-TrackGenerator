@@ -66,6 +66,7 @@ def build_track(
         raise LoadError('Property "units_per_tile" must be greater than 0')
 
     track.flat_shaded = optional_bool(root, "flat_shaded", False)
+    track.z_offset = optional_number(root, "z_offset", 0.0)
 
     track.meshes = list(meshes)
     track.track_mesh_index = optional_int(root, "track_mesh_index", 0)
@@ -74,7 +75,17 @@ def build_track(
             f'Property "track_mesh_index" ({track.track_mesh_index}) is out of range'
         )
 
+    # Optional occlusion mask mesh (enables split/transfer front/behind sub-sprites).
+    track.mask_mesh_index = optional_int(root, "mask_mesh_index", -1)
+    if track.mask_mesh_index >= 0 and not (meshes and track.mask_mesh_index < len(meshes)):
+        raise LoadError(
+            f'Property "mask_mesh_index" ({track.mask_mesh_index}) is out of range'
+        )
+
     track.preview = preview if preview is not None else IndexedImage.blank(1, 1)
+
+    # Optional masks JSON override (carves per-view sub-sprites); empty = bundled default.
+    track.masks_path = optional_string(root, "masks")
 
     track.sections = _build_sections(root)
     return track

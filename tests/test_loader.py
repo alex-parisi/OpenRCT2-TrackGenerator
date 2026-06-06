@@ -79,9 +79,28 @@ def test_track_mesh_index_out_of_range_raises():
         build_track(_config(track_mesh_index=5), _meshes(1))
 
 
+def test_mask_mesh_index_out_of_range_raises():
+    with pytest.raises(LoadError, match="mask_mesh_index"):
+        build_track(_config(mask_mesh_index=5), _meshes(1))
+
+
+def test_mask_mesh_index_defaults_to_none():
+    assert build_track(_config(), _meshes()).mask_mesh_index == -1
+
+
+def test_z_offset_optional_and_read():
+    assert build_track(_config(), _meshes()).z_offset == 0.0
+    assert build_track(_config(z_offset=3), _meshes()).z_offset == 3.0
+
+
 def test_version_override():
     track = build_track(_config(version="2.0"), _meshes())
     assert track.version == "2.0"
+
+
+def test_masks_path_optional_and_override():
+    assert build_track(_config(), _meshes()).masks_path == ""
+    assert build_track(_config(masks="custom/m.json"), _meshes()).masks_path == "custom/m.json"
 
 
 def test_load_track_from_disk(tmp_path):
