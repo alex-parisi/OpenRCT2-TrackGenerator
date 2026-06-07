@@ -169,6 +169,353 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
         "gentle_to_right_bank", curves.gentle_to_right_bank_curve, curves.FLAT_TO_GENTLE_LENGTH,
         flags=TrackFlag.EXIT_BANK_RIGHT,
     ),
+    # Batch F: gentle<->bank combo transitions (orthogonal)
+    "gentle_left_bank": TrackSection(
+        "gentle_left_bank", curves.gentle_left_bank_curve, curves.GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "gentle_right_bank": TrackSection(
+        "gentle_right_bank", curves.gentle_right_bank_curve, curves.GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_to_gentle_left_bank": TrackSection(
+        "gentle_to_gentle_left_bank", curves.gentle_to_gentle_left_bank_curve, curves.GENTLE_LENGTH,
+        flags=TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "gentle_to_gentle_right_bank": TrackSection(
+        "gentle_to_gentle_right_bank", curves.gentle_to_gentle_right_bank_curve,
+        curves.GENTLE_LENGTH, flags=TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_left_bank_to_gentle": TrackSection(
+        "gentle_left_bank_to_gentle", curves.gentle_left_bank_to_gentle_curve, curves.GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "gentle_right_bank_to_gentle": TrackSection(
+        "gentle_right_bank_to_gentle", curves.gentle_right_bank_to_gentle_curve,
+        curves.GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "flat_to_gentle_left_bank": TrackSection(
+        "flat_to_gentle_left_bank", curves.flat_to_gentle_left_bank_curve,
+        curves.FLAT_TO_GENTLE_LENGTH, flags=TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "flat_to_gentle_right_bank": TrackSection(
+        "flat_to_gentle_right_bank", curves.flat_to_gentle_right_bank_curve,
+        curves.FLAT_TO_GENTLE_LENGTH, flags=TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_left_bank_to_flat": TrackSection(
+        "gentle_left_bank_to_flat", curves.gentle_left_bank_to_flat_curve,
+        curves.FLAT_TO_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "gentle_right_bank_to_flat": TrackSection(
+        "gentle_right_bank_to_flat", curves.gentle_right_bank_to_flat_curve,
+        curves.FLAT_TO_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "left_bank_to_gentle_left_bank": TrackSection(
+        "left_bank_to_gentle_left_bank", curves.left_bank_to_gentle_left_bank_curve,
+        curves.FLAT_TO_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "right_bank_to_gentle_right_bank": TrackSection(
+        "right_bank_to_gentle_right_bank", curves.right_bank_to_gentle_right_bank_curve,
+        curves.FLAT_TO_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_left_bank_to_left_bank": TrackSection(
+        "gentle_left_bank_to_left_bank", curves.gentle_left_bank_to_left_bank_curve,
+        curves.FLAT_TO_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "gentle_right_bank_to_right_bank": TrackSection(
+        "gentle_right_bank_to_right_bank", curves.gentle_right_bank_to_right_bank_curve,
+        curves.FLAT_TO_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    # Batch G: gentle<->bank combo transitions (diagonal)
+    "gentle_left_bank_diag": TrackSection(
+        "gentle_left_bank_diag", curves.gentle_left_bank_diag_curve, curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE
+        | TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "gentle_right_bank_diag": TrackSection(
+        "gentle_right_bank_diag", curves.gentle_right_bank_diag_curve, curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE
+        | TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_to_gentle_left_bank_diag": TrackSection(
+        "gentle_to_gentle_left_bank_diag", curves.gentle_to_gentle_left_bank_diag_curve,
+        curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "gentle_to_gentle_right_bank_diag": TrackSection(
+        "gentle_to_gentle_right_bank_diag", curves.gentle_to_gentle_right_bank_diag_curve,
+        curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_left_bank_to_gentle_diag": TrackSection(
+        "gentle_left_bank_to_gentle_diag", curves.gentle_left_bank_to_gentle_diag_curve,
+        curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.ENTRY_BANK_LEFT,
+    ),
+    "gentle_right_bank_to_gentle_diag": TrackSection(
+        "gentle_right_bank_to_gentle_diag", curves.gentle_right_bank_to_gentle_diag_curve,
+        curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.ENTRY_BANK_RIGHT,
+    ),
+    "flat_to_gentle_left_bank_diag": TrackSection(
+        "flat_to_gentle_left_bank_diag", curves.flat_to_gentle_left_bank_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "flat_to_gentle_right_bank_diag": TrackSection(
+        "flat_to_gentle_right_bank_diag", curves.flat_to_gentle_right_bank_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_left_bank_to_flat_diag": TrackSection(
+        "gentle_left_bank_to_flat_diag", curves.gentle_left_bank_to_flat_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.ENTRY_BANK_LEFT,
+    ),
+    "gentle_right_bank_to_flat_diag": TrackSection(
+        "gentle_right_bank_to_flat_diag", curves.gentle_right_bank_to_flat_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE | TrackFlag.ENTRY_BANK_RIGHT,
+    ),
+    "left_bank_to_gentle_left_bank_diag": TrackSection(
+        "left_bank_to_gentle_left_bank_diag", curves.left_bank_to_gentle_left_bank_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE
+        | TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "right_bank_to_gentle_right_bank_diag": TrackSection(
+        "right_bank_to_gentle_right_bank_diag", curves.right_bank_to_gentle_right_bank_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE
+        | TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "gentle_left_bank_to_left_bank_diag": TrackSection(
+        "gentle_left_bank_to_left_bank_diag", curves.gentle_left_bank_to_left_bank_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE
+        | TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "gentle_right_bank_to_right_bank_diag": TrackSection(
+        "gentle_right_bank_to_right_bank_diag", curves.gentle_right_bank_to_right_bank_diag_curve,
+        curves.FLAT_TO_GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE
+        | TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    # Batch H: gentle turns (turns that climb) + their banked variants
+    "small_turn_left_gentle": TrackSection(
+        "small_turn_left_gentle", curves.small_turn_left_gentle_curve,
+        curves.SMALL_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_LEFT,
+    ),
+    "small_turn_right_gentle": TrackSection(
+        "small_turn_right_gentle", curves.small_turn_right_gentle_curve,
+        curves.SMALL_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_RIGHT,
+    ),
+    "medium_turn_left_gentle": TrackSection(
+        "medium_turn_left_gentle", curves.medium_turn_left_gentle_curve,
+        curves.MEDIUM_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_LEFT,
+    ),
+    "medium_turn_right_gentle": TrackSection(
+        "medium_turn_right_gentle", curves.medium_turn_right_gentle_curve,
+        curves.MEDIUM_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_RIGHT,
+    ),
+    "large_turn_left_to_diag_gentle": TrackSection(
+        "large_turn_left_to_diag_gentle", curves.large_turn_left_to_diag_gentle_curve,
+        curves.LARGE_TURN_GENTLE_LENGTH, flags=TrackFlag.EXIT_45_DEG_LEFT,
+    ),
+    "large_turn_right_to_diag_gentle": TrackSection(
+        "large_turn_right_to_diag_gentle", curves.large_turn_right_to_diag_gentle_curve,
+        curves.LARGE_TURN_GENTLE_LENGTH, flags=TrackFlag.EXIT_45_DEG_RIGHT,
+    ),
+    "large_turn_left_to_orthogonal_gentle": TrackSection(
+        "large_turn_left_to_orthogonal_gentle", curves.large_turn_left_to_orthogonal_gentle_curve,
+        curves.LARGE_TURN_GENTLE_LENGTH, flags=TrackFlag.DIAGONAL_2 | TrackFlag.EXIT_45_DEG_LEFT,
+    ),
+    "large_turn_right_to_orthogonal_gentle": TrackSection(
+        "large_turn_right_to_orthogonal_gentle", curves.large_turn_right_to_orthogonal_gentle_curve,
+        curves.LARGE_TURN_GENTLE_LENGTH, flags=TrackFlag.DIAGONAL_2 | TrackFlag.EXIT_45_DEG_RIGHT,
+    ),
+    "small_turn_left_bank_gentle": TrackSection(
+        "small_turn_left_bank_gentle", curves.small_turn_left_bank_gentle_curve,
+        curves.SMALL_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT | TrackFlag.OFFSET_SPRITE_MASK
+        | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_LEFT,
+    ),
+    "small_turn_right_bank_gentle": TrackSection(
+        "small_turn_right_bank_gentle", curves.small_turn_right_bank_gentle_curve,
+        curves.SMALL_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT | TrackFlag.OFFSET_SPRITE_MASK
+        | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_RIGHT,
+    ),
+    "medium_turn_left_bank_gentle": TrackSection(
+        "medium_turn_left_bank_gentle", curves.medium_turn_left_bank_gentle_curve,
+        curves.MEDIUM_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT | TrackFlag.OFFSET_SPRITE_MASK
+        | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_LEFT,
+    ),
+    "medium_turn_right_bank_gentle": TrackSection(
+        "medium_turn_right_bank_gentle", curves.medium_turn_right_bank_gentle_curve,
+        curves.MEDIUM_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT | TrackFlag.OFFSET_SPRITE_MASK
+        | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_RIGHT,
+    ),
+    "large_turn_left_bank_to_diag_gentle": TrackSection(
+        "large_turn_left_bank_to_diag_gentle", curves.large_turn_left_bank_to_diag_gentle_curve,
+        curves.LARGE_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.EXIT_90_DEG_LEFT | TrackFlag.EXIT_45_DEG_LEFT
+        | TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "large_turn_right_bank_to_diag_gentle": TrackSection(
+        "large_turn_right_bank_to_diag_gentle", curves.large_turn_right_bank_to_diag_gentle_curve,
+        curves.LARGE_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.EXIT_45_DEG_RIGHT | TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "large_turn_left_bank_to_orthogonal_gentle": TrackSection(
+        "large_turn_left_bank_to_orthogonal_gentle",
+        curves.large_turn_left_bank_to_orthogonal_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.DIAGONAL_2 | TrackFlag.EXIT_45_DEG_LEFT
+        | TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT,
+    ),
+    "large_turn_right_bank_to_orthogonal_gentle": TrackSection(
+        "large_turn_right_bank_to_orthogonal_gentle",
+        curves.large_turn_right_bank_to_orthogonal_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH,
+        flags=TrackFlag.DIAGONAL_2 | TrackFlag.EXIT_45_DEG_RIGHT
+        | TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.EXIT_BANK_RIGHT,
+    ),
+    "small_turn_left_bank_to_gentle": TrackSection(
+        "small_turn_left_bank_to_gentle", curves.small_turn_left_bank_to_gentle_curve,
+        curves.TURN_BANK_TRANSITION_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.ENTRY_BANK_LEFT | TrackFlag.SUPPORT_BASE
+        | TrackFlag.EXIT_90_DEG_LEFT,
+    ),
+    "small_turn_right_bank_to_gentle": TrackSection(
+        "small_turn_right_bank_to_gentle", curves.small_turn_right_bank_to_gentle_curve,
+        curves.TURN_BANK_TRANSITION_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.ENTRY_BANK_RIGHT | TrackFlag.SUPPORT_BASE
+        | TrackFlag.EXIT_90_DEG_RIGHT,
+    ),
+    # Batch I: steep turns
+    "very_small_turn_left_steep": TrackSection(
+        "very_small_turn_left_steep", curves.very_small_turn_left_steep_curve,
+        curves.VERY_SMALL_TURN_STEEP_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_LEFT
+        | TrackFlag.ALT_INVERT,
+    ),
+    "very_small_turn_right_steep": TrackSection(
+        "very_small_turn_right_steep", curves.very_small_turn_right_steep_curve,
+        curves.VERY_SMALL_TURN_STEEP_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_RIGHT
+        | TrackFlag.ALT_INVERT,
+    ),
+    "small_turn_left_steep": TrackSection(
+        "small_turn_left_steep", curves.small_turn_left_steep_curve,
+        curves.SMALL_TURN_STEEP_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_LEFT
+        | TrackFlag.ALT_INVERT,
+    ),
+    "small_turn_right_steep": TrackSection(
+        "small_turn_right_steep", curves.small_turn_right_steep_curve,
+        curves.SMALL_TURN_STEEP_LENGTH,
+        flags=TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.SUPPORT_BASE | TrackFlag.EXIT_90_DEG_RIGHT
+        | TrackFlag.ALT_INVERT,
+    ),
+    "large_turn_left_to_diag_steep": TrackSection(
+        "large_turn_left_to_diag_steep", curves.large_turn_left_to_diag_steep_curve,
+        curves.LARGE_TURN_STEEP_LENGTH,
+        flags=TrackFlag.EXIT_45_DEG_LEFT | TrackFlag.ALT_INVERT,
+    ),
+    "large_turn_right_to_diag_steep": TrackSection(
+        "large_turn_right_to_diag_steep", curves.large_turn_right_to_diag_steep_curve,
+        curves.LARGE_TURN_STEEP_LENGTH,
+        flags=TrackFlag.EXIT_45_DEG_RIGHT | TrackFlag.ALT_INVERT,
+    ),
+    "large_turn_left_to_orthogonal_steep": TrackSection(
+        "large_turn_left_to_orthogonal_steep", curves.large_turn_left_to_orthogonal_steep_curve,
+        curves.LARGE_TURN_STEEP_LENGTH,
+        flags=TrackFlag.DIAGONAL_2 | TrackFlag.EXIT_45_DEG_LEFT | TrackFlag.ALT_INVERT,
+    ),
+    "large_turn_right_to_orthogonal_steep": TrackSection(
+        "large_turn_right_to_orthogonal_steep", curves.large_turn_right_to_orthogonal_steep_curve,
+        curves.LARGE_TURN_STEEP_LENGTH,
+        flags=TrackFlag.DIAGONAL_2 | TrackFlag.EXIT_45_DEG_RIGHT | TrackFlag.ALT_INVERT,
+    ),
+    # Batch J: diagonal / small slope transitions
+    "small_flat_to_steep": TrackSection(
+        "small_flat_to_steep", curves.small_flat_to_steep_curve, curves.SMALL_FLAT_TO_STEEP_LENGTH,
+    ),
+    "small_steep_to_flat": TrackSection(
+        "small_steep_to_flat", curves.small_steep_to_flat_curve, curves.SMALL_FLAT_TO_STEEP_LENGTH,
+    ),
+    "small_flat_to_steep_diag": TrackSection(
+        "small_flat_to_steep_diag", curves.small_flat_to_steep_diag_curve,
+        curves.SMALL_FLAT_TO_STEEP_DIAG_LENGTH, flags=TrackFlag.DIAGONAL,
+    ),
+    "small_steep_to_flat_diag": TrackSection(
+        "small_steep_to_flat_diag", curves.small_steep_to_flat_diag_curve,
+        curves.SMALL_FLAT_TO_STEEP_DIAG_LENGTH, flags=TrackFlag.DIAGONAL,
+    ),
+    "flat_to_steep_diag": TrackSection(
+        "flat_to_steep_diag", curves.flat_to_steep_diag_curve, curves.FLAT_TO_STEEP_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL,
+    ),
+    "steep_to_flat_diag": TrackSection(
+        "steep_to_flat_diag", curves.steep_to_flat_diag_curve, curves.FLAT_TO_STEEP_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL,
+    ),
+    "steep_to_vertical_diag": TrackSection(
+        "steep_to_vertical_diag", curves.steep_to_vertical_diag_curve,
+        curves.STEEP_TO_VERTICAL_DIAG_LENGTH, flags=TrackFlag.DIAGONAL,
+    ),
+    "vertical_to_steep_diag": TrackSection(
+        "vertical_to_steep_diag", curves.vertical_to_steep_diag_curve,
+        curves.STEEP_TO_VERTICAL_DIAG_LENGTH, flags=TrackFlag.DIAGONAL,
+    ),
+    "vertical_diag": TrackSection(
+        "vertical_diag", curves.vertical_diag_curve, curves.VERTICAL_LENGTH,
+    ),
+    # Batch K: steep<->bank transitions
+    "gentle_left_bank_to_steep": TrackSection(
+        "gentle_left_bank_to_steep", curves.gentle_left_bank_to_steep_curve,
+        curves.GENTLE_TO_STEEP_LENGTH, flags=TrackFlag.ALT_PREFER_ODD,
+    ),
+    "gentle_right_bank_to_steep": TrackSection(
+        "gentle_right_bank_to_steep", curves.gentle_right_bank_to_steep_curve,
+        curves.GENTLE_TO_STEEP_LENGTH, flags=TrackFlag.ALT_PREFER_ODD,
+    ),
+    "steep_to_gentle_left_bank": TrackSection(
+        "steep_to_gentle_left_bank", curves.steep_to_gentle_left_bank_curve,
+        curves.GENTLE_TO_STEEP_LENGTH, flags=TrackFlag.ALT_INVERT | TrackFlag.ALT_PREFER_ODD,
+    ),
+    "steep_to_gentle_right_bank": TrackSection(
+        "steep_to_gentle_right_bank", curves.steep_to_gentle_right_bank_curve,
+        curves.GENTLE_TO_STEEP_LENGTH, flags=TrackFlag.ALT_INVERT | TrackFlag.ALT_PREFER_ODD,
+    ),
+    "gentle_left_bank_to_steep_diag": TrackSection(
+        "gentle_left_bank_to_steep_diag", curves.gentle_left_bank_to_steep_diag_curve,
+        curves.GENTLE_TO_STEEP_DIAG_LENGTH, flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE,
+    ),
+    "gentle_right_bank_to_steep_diag": TrackSection(
+        "gentle_right_bank_to_steep_diag", curves.gentle_right_bank_to_steep_diag_curve,
+        curves.GENTLE_TO_STEEP_DIAG_LENGTH, flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE,
+    ),
+    "steep_to_gentle_left_bank_diag": TrackSection(
+        "steep_to_gentle_left_bank_diag", curves.steep_to_gentle_left_bank_diag_curve,
+        curves.GENTLE_TO_STEEP_DIAG_LENGTH, flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE,
+    ),
+    "steep_to_gentle_right_bank_diag": TrackSection(
+        "steep_to_gentle_right_bank_diag", curves.steep_to_gentle_right_bank_diag_curve,
+        curves.GENTLE_TO_STEEP_DIAG_LENGTH, flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE,
+    ),
     "small_turn_left_bank": TrackSection(
         "small_turn_left_bank", curves.small_turn_left_bank_curve, curves.SMALL_TURN_LENGTH,
         flags=TrackFlag.ENTRY_BANK_LEFT | TrackFlag.EXIT_BANK_LEFT | TrackFlag.EXIT_90_DEG_LEFT,
@@ -381,6 +728,77 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
     "vertical_loop_right": TrackSection(
         "vertical_loop_right", curves.vertical_loop_right_curve, curves.VERTICAL_LOOP_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_180_DEG,
+    ),
+    # Batch L: banked inversions
+    "banked_barrel_roll_left": TrackSection(
+        "banked_barrel_roll_left", curves.banked_barrel_roll_left_curve, curves.BARREL_ROLL_LENGTH,
+        flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "banked_barrel_roll_right": TrackSection(
+        "banked_barrel_roll_right", curves.banked_barrel_roll_right_curve,
+        curves.BARREL_ROLL_LENGTH, flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "banked_inline_twist_left": TrackSection(
+        "banked_inline_twist_left", curves.banked_inline_twist_left_curve,
+        curves.INLINE_TWIST_LENGTH, flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "banked_inline_twist_right": TrackSection(
+        "banked_inline_twist_right", curves.banked_inline_twist_right_curve,
+        curves.INLINE_TWIST_LENGTH, flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "banked_zero_g_roll_left": TrackSection(
+        "banked_zero_g_roll_left", curves.banked_zero_g_roll_left_curve, curves.ZERO_G_ROLL_LENGTH,
+        flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    "banked_zero_g_roll_right": TrackSection(
+        "banked_zero_g_roll_right", curves.banked_zero_g_roll_right_curve,
+        curves.ZERO_G_ROLL_LENGTH, flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+    ),
+    # Batch L: 90 degree dive loops
+    "dive_loop_90_left": TrackSection(
+        "dive_loop_90_left", curves.dive_loop_90_left_curve, curves.DIVE_LOOP_90_LENGTH,
+        flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_90_DEG_LEFT,
+    ),
+    "dive_loop_90_right": TrackSection(
+        "dive_loop_90_right", curves.dive_loop_90_right_curve, curves.DIVE_LOOP_90_LENGTH,
+        flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_90_DEG_RIGHT,
+    ),
+    # Batch L: brakes / boosters / misc (reuse base curves; special models render as plain track)
+    "flat_asymmetric": TrackSection(
+        "flat_asymmetric", curves.flat_curve, curves.FLAT_LENGTH, chain="flat",
+    ),
+    "brake_gentle": TrackSection(
+        "brake_gentle", curves.gentle_curve, curves.GENTLE_LENGTH, chain="gentle",
+    ),
+    "magnetic_brake_gentle": TrackSection(
+        "magnetic_brake_gentle", curves.gentle_curve, curves.GENTLE_LENGTH, chain="gentle",
+    ),
+    "launched_lift": TrackSection(
+        "launched_lift", curves.gentle_curve, curves.GENTLE_LENGTH, chain="gentle",
+    ),
+    "vertical_booster": TrackSection(
+        "vertical_booster", curves.vertical_curve, curves.VERTICAL_LENGTH,
+        flags=TrackFlag.VERTICAL | TrackFlag.NO_SUPPORTS,
+    ),
+    "brake_diag": TrackSection(
+        "brake_diag", curves.flat_diag_curve, curves.FLAT_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL, chain="flat_diag",
+    ),
+    "block_brake_diag": TrackSection(
+        "block_brake_diag", curves.flat_diag_curve, curves.FLAT_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL, chain="flat_diag",
+    ),
+    "magnetic_brake_diag": TrackSection(
+        "magnetic_brake_diag", curves.flat_diag_curve, curves.FLAT_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL, chain="flat_diag",
+    ),
+    "brake_gentle_diag": TrackSection(
+        "brake_gentle_diag", curves.gentle_diag_curve, curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE, chain="flat_diag",
+    ),
+    "magnetic_brake_gentle_diag": TrackSection(
+        "magnetic_brake_gentle_diag", curves.gentle_diag_curve, curves.GENTLE_DIAG_LENGTH,
+        flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE, chain="flat_diag",
     ),
 }
 

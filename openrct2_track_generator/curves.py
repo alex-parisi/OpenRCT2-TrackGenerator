@@ -32,6 +32,7 @@ __all__ = [
     "ZERO_G_ROLL_LENGTH",
     "LARGE_ZERO_G_ROLL_LENGTH",
     "DIVE_LOOP_45_LENGTH",
+    "DIVE_LOOP_90_LENGTH",
     "VERTICAL_TWIST_LENGTH",
     "VERTICAL_TWIST_45_LENGTH",
     "VERTICAL_LOOP_LENGTH",
@@ -45,6 +46,14 @@ __all__ = [
     "GENTLE_DIAG_LENGTH",
     "GENTLE_TO_STEEP_DIAG_LENGTH",
     "LARGE_TURN_LENGTH",
+    "SMALL_TURN_GENTLE_LENGTH",
+    "MEDIUM_TURN_GENTLE_LENGTH",
+    "LARGE_TURN_GENTLE_LENGTH",
+    "VERY_SMALL_TURN_LENGTH",
+    "TURN_BANK_TRANSITION_LENGTH",
+    "VERY_SMALL_TURN_STEEP_LENGTH",
+    "SMALL_TURN_STEEP_LENGTH",
+    "LARGE_TURN_STEEP_LENGTH",
     "MEDIUM_HELIX_LENGTH",
     "MEDIUM_TURN_LENGTH",
     "SMALL_HELIX_LENGTH",
@@ -54,6 +63,10 @@ __all__ = [
     "STEEP_LENGTH",
     "STEEP_TO_VERTICAL_LENGTH",
     "VERTICAL_LENGTH",
+    "SMALL_FLAT_TO_STEEP_LENGTH",
+    "FLAT_TO_STEEP_DIAG_LENGTH",
+    "SMALL_FLAT_TO_STEEP_DIAG_LENGTH",
+    "STEEP_TO_VERTICAL_DIAG_LENGTH",
     "barrel_roll_left_curve",
     "barrel_roll_right_curve",
     "corkscrew_left_curve",
@@ -118,11 +131,23 @@ STEEP_LENGTH: float = 1.914854 * TILE_SIZE
 FLAT_TO_STEEP_LENGTH: float = 4.792426 * TILE_SIZE
 STEEP_TO_VERTICAL_LENGTH: float = 1.531568 * TILE_SIZE
 VERTICAL_LENGTH: float = 0.816497 * TILE_SIZE
+SMALL_FLAT_TO_STEEP_LENGTH: float = 1.221327 * TILE_SIZE
+FLAT_TO_STEEP_DIAG_LENGTH: float = 4.956727 * TILE_SIZE
+SMALL_FLAT_TO_STEEP_DIAG_LENGTH: float = 1.584693 * TILE_SIZE
+STEEP_TO_VERTICAL_DIAG_LENGTH: float = 3.065913 * TILE_SIZE
 # SMALL_TURN_LENGTH is 0.75*pi*TILE_SIZE; with the curve's angle = d/(1.5*TILE_SIZE)
 # this makes the piece sweep exactly a quarter turn over its length.
 SMALL_TURN_LENGTH: float = 0.75 * math.pi * TILE_SIZE
 MEDIUM_TURN_LENGTH: float = 1.25 * math.pi * TILE_SIZE
 LARGE_TURN_LENGTH: float = 2.757100 * TILE_SIZE
+VERY_SMALL_TURN_LENGTH: float = 0.25 * math.pi * TILE_SIZE
+SMALL_TURN_GENTLE_LENGTH: float = 2.493656 * TILE_SIZE
+MEDIUM_TURN_GENTLE_LENGTH: float = 4.252990 * TILE_SIZE
+LARGE_TURN_GENTLE_LENGTH: float = 3.017199 * TILE_SIZE
+TURN_BANK_TRANSITION_LENGTH: float = 2.442290 * TILE_SIZE
+VERY_SMALL_TURN_STEEP_LENGTH: float = 1.812048 * TILE_SIZE
+SMALL_TURN_STEEP_LENGTH: float = 4.027196 * TILE_SIZE
+LARGE_TURN_STEEP_LENGTH: float = 4.930971 * TILE_SIZE
 FLAT_DIAG_LENGTH: float = 1.414213 * TILE_SIZE
 FLAT_TO_GENTLE_DIAG_LENGTH: float = 1.433617 * TILE_SIZE
 GENTLE_DIAG_LENGTH: float = 1.471960 * TILE_SIZE
@@ -162,6 +187,9 @@ LARGE_ZERO_G_ROLL_BASE_LENGTH: float = 5.385804 * TILE_SIZE
 LARGE_ZERO_G_ROLL_LENGTH: float = 5.568164 * TILE_SIZE
 DIVE_LOOP_45_LENGTH: float = 5.335896 * TILE_SIZE
 VERTICAL_TWIST_LENGTH: float = 2.449490 * TILE_SIZE
+_DIVE_LOOP_90_LENGTH_1: float = 3.181834 * TILE_SIZE
+_DIVE_LOOP_90_LENGTH_2: float = 2.272595 * TILE_SIZE
+DIVE_LOOP_90_LENGTH: float = _DIVE_LOOP_90_LENGTH_1 + _DIVE_LOOP_90_LENGTH_2
 VERTICAL_TWIST_45_LENGTH: float = 1.632993 * TILE_SIZE
 _VERTICAL_LOOP_FACTOR: float = 1.006604
 _VERTICAL_LOOP_SEGMENT1_LENGTH: float = 0.540062 * TILE_SIZE
@@ -410,6 +438,23 @@ def cubic_curve_vertical_diagonal_old(
     two horizontal axes); "y" is height. Uses the ``_old`` reparameterization.
     """
     u = reparameterize_old(p, distance)
+    xa, xb, xc, _xd = x_coeffs
+    ya, yb, yc, _yd = y_coeffs
+    x = cubic(*x_coeffs, u)
+    y = cubic(*y_coeffs, u)
+    dx = cubic_derivative(xa, xb, xc, u)
+    dy = cubic_derivative(ya, yb, yc, u)
+    position = np.stack([-x / _SQRT2, y, x / _SQRT2], axis=1)
+    tangent = _normalize(np.stack([-dx / _SQRT2, dy, dx / _SQRT2], axis=1))
+    return plane_curve_vertical_diagonal(position, tangent)
+
+
+def cubic_curve_vertical_diagonal(
+    x_coeffs: _Quad, y_coeffs: _Quad, p: _Hept, distance: NDArray[np.float64]
+) -> TrackPointArray:
+    """Like :func:`cubic_curve_vertical_diagonal_old` but with the non-legacy
+    ``reparameterize`` (track_sections.cpp::cubic_curve_vertical_diagonal)."""
+    u = reparameterize(p, distance)
     xa, xb, xc, _xd = x_coeffs
     ya, yb, yc, _yd = y_coeffs
     x = cubic(*x_coeffs, u)
@@ -813,6 +858,170 @@ def gentle_to_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray
     )
 
 
+# --- Gentle<->bank combo transitions (banked gentle slopes) ---
+def gentle_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A fully left-banked gentle slope."""
+    return banked_curve(gentle_curve(distance), _const_bank(distance))
+
+
+def gentle_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A fully right-banked gentle slope."""
+    return banked_curve(gentle_curve(distance), _const_bank(distance, -1.0))
+
+
+def gentle_to_gentle_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A gentle slope banking up to a left-banked gentle slope."""
+    return banked_curve(gentle_curve(distance), BANK_ANGLE * distance / GENTLE_LENGTH)
+
+
+def gentle_to_gentle_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A gentle slope banking up to a right-banked gentle slope."""
+    return banked_curve(gentle_curve(distance), -BANK_ANGLE * distance / GENTLE_LENGTH)
+
+
+def gentle_left_bank_to_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked gentle slope easing its bank out to an unbanked gentle slope."""
+    return banked_curve(gentle_curve(distance), BANK_ANGLE * (1.0 - distance / GENTLE_LENGTH))
+
+
+def gentle_right_bank_to_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked gentle slope easing its bank out to an unbanked gentle slope."""
+    return banked_curve(gentle_curve(distance), -BANK_ANGLE * (1.0 - distance / GENTLE_LENGTH))
+
+
+def flat_to_gentle_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Flat track rising to a left-banked gentle slope (bank ramps in)."""
+    return banked_curve(
+        flat_to_gentle_curve(distance), BANK_ANGLE * distance / FLAT_TO_GENTLE_LENGTH
+    )
+
+
+def flat_to_gentle_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Flat track rising to a right-banked gentle slope (bank ramps in)."""
+    return banked_curve(
+        flat_to_gentle_curve(distance), -BANK_ANGLE * distance / FLAT_TO_GENTLE_LENGTH
+    )
+
+
+def gentle_left_bank_to_flat_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked gentle slope easing down to flat (bank ramps out)."""
+    return banked_curve(
+        gentle_to_flat_curve(distance), BANK_ANGLE * (1.0 - distance / FLAT_TO_GENTLE_LENGTH)
+    )
+
+
+def gentle_right_bank_to_flat_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked gentle slope easing down to flat (bank ramps out)."""
+    return banked_curve(
+        gentle_to_flat_curve(distance), -BANK_ANGLE * (1.0 - distance / FLAT_TO_GENTLE_LENGTH)
+    )
+
+
+def left_bank_to_gentle_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked flat rising to a left-banked gentle slope (bank held)."""
+    return banked_curve(flat_to_gentle_curve(distance), _const_bank(distance))
+
+
+def right_bank_to_gentle_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked flat rising to a right-banked gentle slope (bank held)."""
+    return banked_curve(flat_to_gentle_curve(distance), _const_bank(distance, -1.0))
+
+
+def gentle_left_bank_to_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked gentle slope easing down to a left-banked flat (bank held)."""
+    return banked_curve(gentle_to_flat_curve(distance), _const_bank(distance))
+
+
+def gentle_right_bank_to_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked gentle slope easing down to a right-banked flat (bank held)."""
+    return banked_curve(gentle_to_flat_curve(distance), _const_bank(distance, -1.0))
+
+
+# --- Gentle<->bank combo transitions (diagonal) ---
+def gentle_left_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A fully left-banked diagonal gentle slope."""
+    return banked_curve(gentle_diag_curve(distance), _const_bank(distance))
+
+
+def gentle_right_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A fully right-banked diagonal gentle slope."""
+    return banked_curve(gentle_diag_curve(distance), _const_bank(distance, -1.0))
+
+
+def gentle_to_gentle_left_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A diagonal gentle slope banking up to a left-banked diagonal gentle slope."""
+    return banked_curve(gentle_diag_curve(distance), BANK_ANGLE * distance / GENTLE_DIAG_LENGTH)
+
+
+def gentle_to_gentle_right_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A diagonal gentle slope banking up to a right-banked diagonal gentle slope."""
+    return banked_curve(gentle_diag_curve(distance), -BANK_ANGLE * distance / GENTLE_DIAG_LENGTH)
+
+
+def gentle_left_bank_to_gentle_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked diagonal gentle slope easing its bank out to unbanked."""
+    return banked_curve(
+        gentle_diag_curve(distance), BANK_ANGLE * (1.0 - distance / GENTLE_DIAG_LENGTH)
+    )
+
+
+def gentle_right_bank_to_gentle_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked diagonal gentle slope easing its bank out to unbanked."""
+    return banked_curve(
+        gentle_diag_curve(distance), -BANK_ANGLE * (1.0 - distance / GENTLE_DIAG_LENGTH)
+    )
+
+
+def flat_to_gentle_left_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Flat diagonal rising to a left-banked diagonal gentle slope (bank ramps in)."""
+    return banked_curve(
+        flat_to_gentle_diag_curve(distance), BANK_ANGLE * distance / FLAT_TO_GENTLE_DIAG_LENGTH
+    )
+
+
+def flat_to_gentle_right_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Flat diagonal rising to a right-banked diagonal gentle slope (bank ramps in)."""
+    return banked_curve(
+        flat_to_gentle_diag_curve(distance), -BANK_ANGLE * distance / FLAT_TO_GENTLE_DIAG_LENGTH
+    )
+
+
+def gentle_left_bank_to_flat_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked diagonal gentle slope easing down to flat diagonal (bank ramps out)."""
+    return banked_curve(
+        gentle_to_flat_diag_curve(distance),
+        BANK_ANGLE * (1.0 - distance / FLAT_TO_GENTLE_DIAG_LENGTH),
+    )
+
+
+def gentle_right_bank_to_flat_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked diagonal gentle slope easing down to flat diagonal (bank ramps out)."""
+    return banked_curve(
+        gentle_to_flat_diag_curve(distance),
+        -BANK_ANGLE * (1.0 - distance / FLAT_TO_GENTLE_DIAG_LENGTH),
+    )
+
+
+def left_bank_to_gentle_left_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked flat diagonal rising to a left-banked diagonal gentle slope (bank held)."""
+    return banked_curve(flat_to_gentle_diag_curve(distance), _const_bank(distance))
+
+
+def right_bank_to_gentle_right_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked flat diagonal rising to a right-banked diagonal gentle slope (bank held)."""
+    return banked_curve(flat_to_gentle_diag_curve(distance), _const_bank(distance, -1.0))
+
+
+def gentle_left_bank_to_left_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked diagonal gentle slope easing down to a left-banked flat diagonal."""
+    return banked_curve(gentle_to_flat_diag_curve(distance), _const_bank(distance))
+
+
+def gentle_right_bank_to_right_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked diagonal gentle slope easing to a right-banked flat diagonal (bank held)."""
+    return banked_curve(gentle_to_flat_diag_curve(distance), _const_bank(distance, -1.0))
+
+
 def small_turn_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
     """A small left turn, fully banked."""
     return banked_curve(small_turn_left_curve(distance), _const_bank(distance))
@@ -968,6 +1177,454 @@ def medium_helix_right_curve(distance: NDArray[np.float64]) -> TrackPointArray:
     grad = CLEARANCE_HEIGHT / (1.25 * math.pi * TILE_SIZE)
     return banked_curve(
         _sloped_turn(distance, 2.5 * TILE_SIZE, grad, -1.0), _const_bank(distance, -1.0)
+    )
+
+
+# --- Gentle turns (turns that climb) ---
+_LARGE_TURN_GENTLE_P: _Hept = (
+    4.11041054e-09, -8.33282223e-08, 7.93153372e-07, 5.33689315e-07,
+    2.91230858e-05, -3.18767423e-05, 9.36918039e-02,
+)
+_IDENTITY_HEPT: _Hept = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+
+
+def small_turn_left_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small left turn that climbs a gentle slope."""
+    return _sloped_turn(distance, 1.5 * TILE_SIZE, 4 * CLEARANCE_HEIGHT / SMALL_TURN_LENGTH, 1.0)
+
+
+def small_turn_right_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small right turn that climbs a gentle slope."""
+    return _sloped_turn(distance, 1.5 * TILE_SIZE, 4 * CLEARANCE_HEIGHT / SMALL_TURN_LENGTH, -1.0)
+
+
+def medium_turn_left_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A medium left turn that climbs a gentle slope."""
+    return _sloped_turn(distance, 2.5 * TILE_SIZE, 8 * CLEARANCE_HEIGHT / MEDIUM_TURN_LENGTH, 1.0)
+
+
+def medium_turn_right_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A medium right turn that climbs a gentle slope."""
+    return _sloped_turn(distance, 2.5 * TILE_SIZE, 8 * CLEARANCE_HEIGHT / MEDIUM_TURN_LENGTH, -1.0)
+
+
+def _large_turn_gentle(
+    x_coeffs: _Quad, y_coeffs: _Quad, distance: NDArray[np.float64], *, orthogonal: bool
+) -> TrackPointArray:
+    """Shared body for the large gentle orthogonal<->diagonal turns (track_sections.cpp).
+
+    A horizontal-plane cubic with a height polynomial overlaid on Y; the frame keeps the
+    horizontal binormal and recomputes the normal after the Y tilt.
+    """
+    u = reparameterize(_LARGE_TURN_GENTLE_P, distance)
+    base = cubic_curve_horizontal(x_coeffs, y_coeffs, _IDENTITY_HEPT, u)
+    if orthogonal:
+        dy = 6 * CLEARANCE_HEIGHT * u - 1.5 * CLEARANCE_HEIGHT * u * (u * u - 2 * u + 1)
+        dty = CLEARANCE_HEIGHT * (6.0 - 1.5 * (3 * u * u - 4 * u + 1)) / LARGE_TURN_LENGTH
+    else:
+        dy = 6 * CLEARANCE_HEIGHT * u - 1.5 * CLEARANCE_HEIGHT * u * u * (u - 1)
+        dty = CLEARANCE_HEIGHT * (6.0 - 1.5 * u * (3 * u - 2)) / LARGE_TURN_LENGTH
+    position = base.position.copy()
+    position[:, 1] += dy
+    tangent = base.tangent.copy()
+    tangent[:, 1] += dty
+    tangent = _normalize(tangent)
+    normal = np.cross(base.binormal, tangent)
+    return TrackPointArray(position, tangent, normal, base.binormal)
+
+
+def large_turn_left_to_diag_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large left orthogonal->diagonal turn that climbs a gentle slope."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return _large_turn_gentle(
+        (68 * ch / 3 - 5 * t, 7.5 * t - 112 * ch / 3, 44 * ch / 3, 0.0),
+        (8 * ch - 2 * t, 3 * t - 8 * ch, 0.0, 0.0),
+        distance, orthogonal=False,
+    )
+
+
+def large_turn_right_to_diag_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large right orthogonal->diagonal turn that climbs a gentle slope."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return _large_turn_gentle(
+        (68 * ch / 3 - 5 * t, 7.5 * t - 112 * ch / 3, 44 * ch / 3, 0.0),
+        (2 * t - 8 * ch, 8 * ch - 3 * t, 0.0, 0.0),
+        distance, orthogonal=False,
+    )
+
+
+def large_turn_left_to_orthogonal_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large left diagonal->orthogonal turn that climbs a gentle slope."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return _large_turn_gentle(
+        (68 * ch / 3 - 5 * t, 7.5 * t - 92 * ch / 3, 8 * ch, 0.0),
+        (-24 * ch / 3 + 2 * t, -3 * t + 48 * ch / 3, -8 * ch, 0.0),
+        distance, orthogonal=True,
+    )
+
+
+def large_turn_right_to_orthogonal_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large right diagonal->orthogonal turn that climbs a gentle slope."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return _large_turn_gentle(
+        (24 * ch / 3 - 2 * t, 3 * t - 48 * ch / 3, 8 * ch, 0.0),
+        (-68 * ch / 3 + 5 * t, -7.5 * t + 92 * ch / 3, -8 * ch, 0.0),
+        distance, orthogonal=True,
+    )
+
+
+def small_turn_left_bank_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small left gentle-climb turn, fully banked."""
+    return banked_curve(small_turn_left_gentle_curve(distance), _const_bank(distance))
+
+
+def small_turn_right_bank_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small right gentle-climb turn, fully banked."""
+    return banked_curve(small_turn_right_gentle_curve(distance), _const_bank(distance, -1.0))
+
+
+def medium_turn_left_bank_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A medium left gentle-climb turn, fully banked."""
+    return banked_curve(medium_turn_left_gentle_curve(distance), _const_bank(distance))
+
+
+def medium_turn_right_bank_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A medium right gentle-climb turn, fully banked."""
+    return banked_curve(medium_turn_right_gentle_curve(distance), _const_bank(distance, -1.0))
+
+
+def large_turn_left_bank_to_diag_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large left orthogonal->diagonal gentle-climb turn, fully banked."""
+    return banked_curve(large_turn_left_to_diag_gentle_curve(distance), _const_bank(distance))
+
+
+def large_turn_right_bank_to_diag_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large right orthogonal->diagonal gentle-climb turn, fully banked."""
+    return banked_curve(
+        large_turn_right_to_diag_gentle_curve(distance), _const_bank(distance, -1.0)
+    )
+
+
+def large_turn_left_bank_to_orthogonal_gentle_curve(
+    distance: NDArray[np.float64],
+) -> TrackPointArray:
+    """A large left diagonal->orthogonal gentle-climb turn, fully banked."""
+    return banked_curve(large_turn_left_to_orthogonal_gentle_curve(distance), _const_bank(distance))
+
+
+def large_turn_right_bank_to_orthogonal_gentle_curve(
+    distance: NDArray[np.float64],
+) -> TrackPointArray:
+    """A large right diagonal->orthogonal gentle-climb turn, fully banked."""
+    return banked_curve(
+        large_turn_right_to_orthogonal_gentle_curve(distance), _const_bank(distance, -1.0)
+    )
+
+
+def small_turn_left_bank_to_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small left banked flat turn easing into an unbanked gentle-climb turn."""
+    radius = 1.5 * TILE_SIZE
+    u = reparameterize(
+        (1.20514043e-11, -1.08738105e-09, 2.56295980e-08, 3.90911309e-07,
+         -2.87550893e-05, -2.67048353e-04, 1.27817285e-01),
+        distance,
+    )
+    a, b = 1.1534817918544915, 0.8673472459416303
+    half_pi_u = 0.5 * math.pi * u
+    position = np.stack(
+        [radius * (1.0 - np.cos(half_pi_u)), u * (a * u + b), radius * np.sin(half_pi_u)], axis=1
+    )
+    tangent = _normalize(
+        np.stack(
+            [0.5 * math.pi * radius * np.sin(half_pi_u), 2 * a * u + b,
+             0.5 * math.pi * radius * np.cos(half_pi_u)],
+            axis=1,
+        )
+    )
+    up = np.tile(np.array([0.0, 1.0, 0.0]), (distance.shape[0], 1))
+    binormal = _normalize(np.cross(tangent, up))
+    normal = np.cross(binormal, tangent)
+    frame = TrackPointArray(position, tangent, normal, binormal)
+    return banked_curve(frame, 0.25 * (1 - u) * math.pi)
+
+
+def small_turn_right_bank_to_gentle_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small right banked flat turn easing into an unbanked gentle-climb turn (mirror)."""
+    left = small_turn_left_bank_to_gentle_curve(distance)
+    return TrackPointArray(
+        left.position * _MIRROR_X,
+        left.tangent * _MIRROR_X,
+        left.normal * _MIRROR_X,
+        left.binormal * np.array([1.0, -1.0, -1.0]),
+    )
+
+
+# --- Steep turns (turns that climb steeply) ---
+def very_small_turn_left_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A very small left turn climbing a steep slope."""
+    g = 8 * CLEARANCE_HEIGHT / VERY_SMALL_TURN_LENGTH
+    return _sloped_turn(distance, 0.5 * TILE_SIZE, g, 1.0)
+
+
+def very_small_turn_right_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A very small right turn climbing a steep slope."""
+    g = 8 * CLEARANCE_HEIGHT / VERY_SMALL_TURN_LENGTH
+    return _sloped_turn(distance, 0.5 * TILE_SIZE, g, -1.0)
+
+
+def small_turn_left_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small left turn climbing a steep slope."""
+    g = 16 * CLEARANCE_HEIGHT / SMALL_TURN_LENGTH
+    return _sloped_turn(distance, 1.5 * TILE_SIZE, g, 1.0)
+
+
+def small_turn_right_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A small right turn climbing a steep slope."""
+    g = 16 * CLEARANCE_HEIGHT / SMALL_TURN_LENGTH
+    return _sloped_turn(distance, 1.5 * TILE_SIZE, g, -1.0)
+
+
+def _large_turn_steep(
+    x_coeffs: _Quad, y_coeffs: _Quad, z_coeffs: _Quad, p: _Hept, distance: NDArray[np.float64]
+) -> TrackPointArray:
+    """Shared body for the large steep orthogonal<->diagonal turns (track_sections.cpp).
+
+    A full 3D cubic (X/Y/Z) with the frame built from the tangent: ``normal`` starts as the
+    up axis, ``binormal = tangent × up`` (renormalized), then ``normal = binormal × tangent``.
+    """
+    u = reparameterize(p, distance)
+    n = distance.shape[0]
+    position = np.stack([cubic(*x_coeffs, u), cubic(*y_coeffs, u), cubic(*z_coeffs, u)], axis=1)
+    tangent = _normalize(
+        np.stack(
+            [
+                cubic_derivative(x_coeffs[0], x_coeffs[1], x_coeffs[2], u),
+                cubic_derivative(y_coeffs[0], y_coeffs[1], y_coeffs[2], u),
+                cubic_derivative(z_coeffs[0], z_coeffs[1], z_coeffs[2], u),
+            ],
+            axis=1,
+        )
+    )
+    up = np.tile(np.array([0.0, 1.0, 0.0]), (n, 1))
+    binormal = _normalize(np.cross(tangent, up))
+    normal = _normalize(np.cross(binormal, tangent))
+    return TrackPointArray(position, tangent, normal, binormal)
+
+
+def large_turn_left_to_diag_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large left orthogonal->diagonal turn climbing a steep slope."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return _large_turn_steep(
+        (8 * ch - 2 * t, 3 * t - 8 * ch, 0.0, 0.0),
+        (-2.985488 * ch, -0.965078 * ch, 23.950566 * ch, 0.0),
+        (68 * ch / 3 - 5 * t, 7.5 * t - 112 * ch / 3, 44 * ch / 3, 0.0),
+        (7.91458958e-10, -3.35963765e-08, 6.19502002e-07, -5.22008490e-06,
+         3.90190055e-05, 5.61490975e-05, 5.29026085e-02),
+        distance,
+    )
+
+
+def large_turn_right_to_diag_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large right orthogonal->diagonal steep turn (mirror of left)."""
+    left = large_turn_left_to_diag_steep_curve(distance)
+    return TrackPointArray(
+        left.position * _MIRROR_X,
+        left.tangent * _MIRROR_X,
+        left.normal * _MIRROR_X,
+        left.binormal * np.array([1.0, -1.0, -1.0]),
+    )
+
+
+def large_turn_left_to_orthogonal_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large left diagonal->orthogonal turn climbing a steep slope."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return _large_turn_steep(
+        (-24 * ch / 3 + 2 * t, -3 * t + 48 * ch / 3, -8 * ch, 0.0),
+        (-2.985488 * ch, 9.921543 * ch, 13.063945 * ch, 0.0),
+        (68 * ch / 3 - 5 * t, 7.5 * t - 92 * ch / 3, 8 * ch, 0.0),
+        (7.91458971e-10, -5.65550966e-08, 1.74026892e-06, -3.10997900e-05,
+         3.86655610e-04, -3.98950137e-03, 8.58061736e-02),
+        distance,
+    )
+
+
+def large_turn_right_to_orthogonal_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A large right diagonal->orthogonal steep turn: the left rotated 90° (x<->z swap)."""
+    left = large_turn_left_to_orthogonal_steep_curve(distance)
+
+    def swap_xz(v: NDArray[np.float64]) -> NDArray[np.float64]:
+        out = v.copy()
+        out[:, 0] = -v[:, 2]
+        out[:, 2] = -v[:, 0]
+        return out
+
+    position = swap_xz(left.position)
+    normal = swap_xz(left.normal)
+    tangent = swap_xz(left.tangent)
+    return TrackPointArray(position, tangent, normal, np.cross(tangent, normal))
+
+
+# --- Diagonal/small slope transitions ---
+def small_flat_to_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A short flat->steep transition (track_sections.cpp)."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return cubic_curve_vertical_old(
+        (2 * ch - t, 2 * t - 4 * ch, 2 * ch, 0.0),
+        (2 * ch, 1 * ch, 0.0, 0.0),
+        (3.05114828e-04, -5.41080425e-03, 3.92230576e-02, -1.50356228e-01,
+         3.31677795e-01, -4.47145240e-01, 5.86667713e-01),
+        distance,
+    )
+
+
+def small_steep_to_flat_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A short steep->flat transition (track_sections.cpp)."""
+    ch, t = CLEARANCE_HEIGHT, TILE_SIZE
+    return cubic_curve_vertical_old(
+        (2 * ch - t, t - 2 * ch, t, 0.0),
+        (2 * ch, -7 * ch, 8 * ch, 0.0),
+        (3.05114828e-04, -4.16244486e-03, 2.24366063e-02, -5.97476791e-02,
+         8.15009919e-02, -4.17427549e-02, 1.53388477e-01),
+        distance,
+    )
+
+
+def small_flat_to_steep_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A short diagonal flat->steep transition (track_sections.cpp)."""
+    ch, t, s = CLEARANCE_HEIGHT, TILE_SIZE, _SQRT2
+    return cubic_curve_vertical_diagonal_old(
+        (s * (2 * ch - t), s * (2 * t - 4 * ch), s * (2 * ch), 0.0),
+        (2 * ch, 1 * ch, 0.0, 0.0),
+        (4.34857856e-05, -1.00180279e-03, 9.43455215e-03, -4.70409694e-02,
+         1.35543609e-01, -2.38941648e-01, 4.19828724e-01),
+        distance,
+    )
+
+
+def small_steep_to_flat_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A short diagonal steep->flat transition (track_sections.cpp)."""
+    ch, t, s = CLEARANCE_HEIGHT, TILE_SIZE, _SQRT2
+    return cubic_curve_vertical_diagonal_old(
+        (s * (2 * ch - t), s * (t - 2 * ch), s * t, 0.0),
+        (2 * ch, -7 * ch, 8 * ch, 0.0),
+        (4.34857856e-05, -7.68536624e-04, 5.36464795e-03, -1.84338486e-02,
+         3.22283971e-02, -2.27275623e-02, 1.33593778e-01),
+        distance,
+    )
+
+
+def flat_to_steep_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A diagonal flat->steep transition (track_sections.cpp)."""
+    ch, ld = CLEARANCE_HEIGHT, FLAT_DIAG_LENGTH
+    return cubic_curve_vertical_diagonal(
+        (0.0, -ld, 4 * ld, 0.0),
+        (-6 * ch, 17 * ch, 0.0, 0.0),
+        (2.04420580e-10, -1.17812861e-08, 3.06797935e-07, -2.92879395e-06,
+         -1.20025847e-05, 7.03253687e-04, 5.35784008e-02),
+        distance,
+    )
+
+
+def steep_to_flat_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A diagonal steep->flat transition (track_sections.cpp)."""
+    ch, ld = CLEARANCE_HEIGHT, FLAT_DIAG_LENGTH
+    return cubic_curve_vertical_diagonal(
+        (0.0, ld, 2 * ld, 0.0),
+        (-6 * ch, ch, 16 * ch, 0.0),
+        (2.04420579e-10, -1.16249524e-08, 2.99126388e-07, -6.19295387e-06,
+         9.82034229e-05, -1.21545816e-03, 7.01283744e-02),
+        distance,
+    )
+
+
+def steep_to_vertical_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A diagonal steep->vertical transition (track_sections.cpp)."""
+    ch, ld = CLEARANCE_HEIGHT, FLAT_DIAG_LENGTH
+    return cubic_curve_vertical_diagonal(
+        (0.5 * ld, -2 * ld, 2.5 * ld, 0.0),
+        (6 * ch / 3, -27 * ch / 3, 60 * ch / 3, 0.0),
+        (-6.19508912e-08, 1.87520939e-06, -2.07741462e-05, 1.25240713e-04,
+         -2.46986241e-04, 2.35735004e-03, 5.58906200e-02),
+        distance,
+    )
+
+
+def vertical_to_steep_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A diagonal vertical->steep transition (track_sections.cpp)."""
+    ch, ld = CLEARANCE_HEIGHT, FLAT_DIAG_LENGTH
+    return cubic_curve_vertical_diagonal(
+        (0.5 * ld, 0.5 * ld, 0.0, 0.0),
+        (6 * ch / 3, 9 * ch / 3, 24 * ch / 3, 0.0),
+        (-6.19508913e-08, 2.51231275e-06, -4.01118484e-05, 2.91984922e-04,
+         -3.21916866e-04, -1.34453268e-02, 1.85838135e-01),
+        distance,
+    )
+
+
+def vertical_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A vertical diagonal climb (track_sections.cpp)."""
+    n = distance.shape[0]
+    position = np.stack([np.zeros(n), distance, np.zeros(n)], axis=1)
+    tangent = np.tile(np.array([0.0, 1.0, 0.0]), (n, 1))
+    return plane_curve_vertical_diagonal(position, tangent)
+
+
+# --- Steep<->bank transitions ---
+def gentle_left_bank_to_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked gentle slope steepening to (unbanked) steep, bank ramping out."""
+    return banked_curve(
+        gentle_to_steep_curve(distance), BANK_ANGLE * (1.0 - distance / GENTLE_TO_STEEP_LENGTH)
+    )
+
+
+def gentle_right_bank_to_steep_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked gentle slope steepening to (unbanked) steep, bank ramping out."""
+    return banked_curve(
+        gentle_to_steep_curve(distance), -BANK_ANGLE * (1.0 - distance / GENTLE_TO_STEEP_LENGTH)
+    )
+
+
+def steep_to_gentle_left_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Steep easing to a left-banked gentle slope, bank ramping in."""
+    return banked_curve(
+        steep_to_gentle_curve(distance), BANK_ANGLE * distance / GENTLE_TO_STEEP_LENGTH
+    )
+
+
+def steep_to_gentle_right_bank_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Steep easing to a right-banked gentle slope, bank ramping in."""
+    return banked_curve(
+        steep_to_gentle_curve(distance), -BANK_ANGLE * distance / GENTLE_TO_STEEP_LENGTH
+    )
+
+
+def gentle_left_bank_to_steep_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left-banked diagonal gentle slope steepening to (unbanked) steep diagonal."""
+    return banked_curve(
+        gentle_to_steep_diag_curve(distance),
+        BANK_ANGLE * (1.0 - distance / GENTLE_TO_STEEP_DIAG_LENGTH),
+    )
+
+
+def gentle_right_bank_to_steep_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right-banked diagonal gentle slope steepening to (unbanked) steep diagonal."""
+    return banked_curve(
+        gentle_to_steep_diag_curve(distance),
+        -BANK_ANGLE * (1.0 - distance / GENTLE_TO_STEEP_DIAG_LENGTH),
+    )
+
+
+def steep_to_gentle_left_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Steep diagonal easing to a left-banked diagonal gentle slope."""
+    return banked_curve(
+        steep_to_gentle_diag_curve(distance), BANK_ANGLE * distance / GENTLE_TO_STEEP_DIAG_LENGTH
+    )
+
+
+def steep_to_gentle_right_bank_diag_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """Steep diagonal easing to a right-banked diagonal gentle slope."""
+    return banked_curve(
+        steep_to_gentle_diag_curve(distance), -BANK_ANGLE * distance / GENTLE_TO_STEEP_DIAG_LENGTH
     )
 
 
@@ -1419,6 +2076,82 @@ def dive_loop_45_right_curve(distance: NDArray[np.float64]) -> TrackPointArray:
     normal = swap_xz(left.normal)
     tangent = swap_xz(left.tangent)
     return TrackPointArray(position, tangent, normal, np.cross(tangent, normal))
+
+
+def banked_barrel_roll_left_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left barrel roll entered already banked (bank ramps out over the roll)."""
+    return banked_curve(
+        barrel_roll_left_curve(distance), BANK_ANGLE * (1.0 - distance / BARREL_ROLL_LENGTH)
+    )
+
+
+def banked_barrel_roll_right_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right barrel roll entered already banked (bank ramps out over the roll)."""
+    return banked_curve(
+        barrel_roll_right_curve(distance), -BANK_ANGLE * (1.0 - distance / BARREL_ROLL_LENGTH)
+    )
+
+
+def banked_inline_twist_left_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left in-line twist entered already banked (bank ramps out)."""
+    return banked_curve(
+        inline_twist_left_curve(distance), BANK_ANGLE * (1.0 - distance / INLINE_TWIST_LENGTH)
+    )
+
+
+def banked_inline_twist_right_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right in-line twist entered already banked (bank ramps out)."""
+    return banked_curve(
+        inline_twist_right_curve(distance), -BANK_ANGLE * (1.0 - distance / INLINE_TWIST_LENGTH)
+    )
+
+
+def banked_zero_g_roll_left_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left zero-G roll entered already banked (bank ramps out)."""
+    return banked_curve(
+        zero_g_roll_left_curve(distance), BANK_ANGLE * (1.0 - distance / ZERO_G_ROLL_LENGTH)
+    )
+
+
+def banked_zero_g_roll_right_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right zero-G roll entered already banked (bank ramps out)."""
+    return banked_curve(
+        zero_g_roll_right_curve(distance), -BANK_ANGLE * (1.0 - distance / ZERO_G_ROLL_LENGTH)
+    )
+
+
+def dive_loop_90_left_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A left 90° dive loop: two 3D Bézier segments with a rolled frame (track_sections.cpp)."""
+    seg1 = bezier3d(
+        (-1.16861994e00, 3.58498900e00, 0.0, 0.0),
+        (-9.51329381e-01, -1.16776749e00, 1.03752057e01, 0.0),
+        (-6.72193719e-01, -8.25125336e-01, 7.33095000e00, 0.0),
+        (-2.95523406e-01, 8.25505818e-01, 4.99992036e-01, -1.57079633e00),
+        (1.97095076e-08, -5.46283881e-07, 6.50545052e-06, -3.53310856e-05,
+         1.44620055e-04, 5.36392584e-04, 7.87955238e-02),
+        distance,
+    )
+    seg2 = bezier3d(
+        (-6.72193719e-01, 2.84170649e00, 3.66411817e00, 2.41636906e00),
+        (-1.65390192e00, -1.11988415e-01, 5.18568259e00, 8.25610885e00),
+        (-1.16861994e00, -7.91291752e-02, 3.66411817e00, 5.83363094e00),
+        (-4.75199495e-02, -6.09846206e-02, 1.26445727e00, -5.40821879e-01),
+        (2.44035733e-08, -1.13775396e-06, 1.40679398e-05, -9.84684135e-05,
+         7.45176307e-04, -3.37667281e-03, 1.36435792e-01),
+        distance - _DIVE_LOOP_90_LENGTH_1,
+    )
+    return _select(distance < _DIVE_LOOP_90_LENGTH_1, seg1, seg2)
+
+
+def dive_loop_90_right_curve(distance: NDArray[np.float64]) -> TrackPointArray:
+    """A right 90° dive loop: the left dive loop mirrored (track_sections.cpp)."""
+    left = dive_loop_90_left_curve(distance)
+    return TrackPointArray(
+        left.position * _MIRROR_X,
+        left.tangent * _MIRROR_X,
+        left.normal * _MIRROR_X,
+        left.binormal * np.array([1.0, -1.0, -1.0]),
+    )
 
 
 def _vertical_twist_curve(

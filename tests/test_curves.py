@@ -155,6 +155,206 @@ def test_diagonal_curves_orthonormal(curve, length, from_origin):
     _assert_orthonormal(tp)
 
 
+@pytest.mark.parametrize(
+    "left_curve,right_curve,length",
+    [
+        (curves.gentle_left_bank_curve, curves.gentle_right_bank_curve, curves.GENTLE_LENGTH),
+        (curves.gentle_to_gentle_left_bank_curve, curves.gentle_to_gentle_right_bank_curve,
+         curves.GENTLE_LENGTH),
+        (curves.gentle_left_bank_to_gentle_curve, curves.gentle_right_bank_to_gentle_curve,
+         curves.GENTLE_LENGTH),
+        (curves.flat_to_gentle_left_bank_curve, curves.flat_to_gentle_right_bank_curve,
+         curves.FLAT_TO_GENTLE_LENGTH),
+        (curves.gentle_left_bank_to_flat_curve, curves.gentle_right_bank_to_flat_curve,
+         curves.FLAT_TO_GENTLE_LENGTH),
+        (curves.left_bank_to_gentle_left_bank_curve, curves.right_bank_to_gentle_right_bank_curve,
+         curves.FLAT_TO_GENTLE_LENGTH),
+        (curves.gentle_left_bank_to_left_bank_curve, curves.gentle_right_bank_to_right_bank_curve,
+         curves.FLAT_TO_GENTLE_LENGTH),
+    ],
+)
+def test_gentle_bank_transitions_orthonormal_and_mirror(left_curve, right_curve, length):
+    d = np.linspace(0.0, length, 8)
+    left = left_curve(d)
+    right = right_curve(d)
+    _assert_orthonormal(left)
+    _assert_orthonormal(right)
+    # Left/right banks are roll-mirrored: same path, opposite normal-x tilt.
+    np.testing.assert_allclose(left.position, right.position, atol=1e-9)
+    np.testing.assert_allclose(left.normal[:, 0], -right.normal[:, 0], atol=1e-9)
+
+
+@pytest.mark.parametrize(
+    "left_curve,right_curve,length",
+    [
+        (curves.gentle_left_bank_diag_curve, curves.gentle_right_bank_diag_curve,
+         curves.GENTLE_DIAG_LENGTH),
+        (curves.gentle_to_gentle_left_bank_diag_curve,
+         curves.gentle_to_gentle_right_bank_diag_curve, curves.GENTLE_DIAG_LENGTH),
+        (curves.gentle_left_bank_to_gentle_diag_curve,
+         curves.gentle_right_bank_to_gentle_diag_curve, curves.GENTLE_DIAG_LENGTH),
+        (curves.flat_to_gentle_left_bank_diag_curve, curves.flat_to_gentle_right_bank_diag_curve,
+         curves.FLAT_TO_GENTLE_DIAG_LENGTH),
+        (curves.gentle_left_bank_to_flat_diag_curve, curves.gentle_right_bank_to_flat_diag_curve,
+         curves.FLAT_TO_GENTLE_DIAG_LENGTH),
+        (curves.left_bank_to_gentle_left_bank_diag_curve,
+         curves.right_bank_to_gentle_right_bank_diag_curve, curves.FLAT_TO_GENTLE_DIAG_LENGTH),
+        (curves.gentle_left_bank_to_left_bank_diag_curve,
+         curves.gentle_right_bank_to_right_bank_diag_curve, curves.FLAT_TO_GENTLE_DIAG_LENGTH),
+    ],
+)
+def test_gentle_bank_diag_transitions_orthonormal_and_mirror(left_curve, right_curve, length):
+    d = np.linspace(0.0, length, 8)
+    left = left_curve(d)
+    right = right_curve(d)
+    _assert_orthonormal(left)
+    _assert_orthonormal(right)
+    np.testing.assert_allclose(left.position, right.position, atol=1e-9)
+
+
+def test_gentle_bank_endpoints_match_bank_angle():
+    from openrct2_track_generator.constants import BANK_ANGLE
+
+    # A fully-banked gentle slope holds BANK_ANGLE throughout; the ramp-in version
+    # starts unbanked and reaches BANK_ANGLE at the end.
+    d = np.array([0.0, curves.GENTLE_LENGTH])
+    held = curves.gentle_left_bank_curve(d)
+    base = curves.gentle_curve(d)
+    cos_held = np.sum(held.normal * base.normal, axis=1)
+    np.testing.assert_allclose(cos_held, np.cos(BANK_ANGLE), atol=1e-6)
+    ramp = curves.gentle_to_gentle_left_bank_curve(d)
+    cos_ramp = np.sum(ramp.normal * base.normal, axis=1)
+    np.testing.assert_allclose(cos_ramp, [1.0, np.cos(BANK_ANGLE)], atol=1e-6)
+
+
+_BATCH_H_CURVES = [
+    (curves.small_turn_left_gentle_curve, curves.SMALL_TURN_GENTLE_LENGTH),
+    (curves.small_turn_right_gentle_curve, curves.SMALL_TURN_GENTLE_LENGTH),
+    (curves.medium_turn_left_gentle_curve, curves.MEDIUM_TURN_GENTLE_LENGTH),
+    (curves.medium_turn_right_gentle_curve, curves.MEDIUM_TURN_GENTLE_LENGTH),
+    (curves.large_turn_left_to_diag_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.large_turn_right_to_diag_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.large_turn_left_to_orthogonal_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.large_turn_right_to_orthogonal_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.small_turn_left_bank_gentle_curve, curves.SMALL_TURN_GENTLE_LENGTH),
+    (curves.small_turn_right_bank_gentle_curve, curves.SMALL_TURN_GENTLE_LENGTH),
+    (curves.medium_turn_left_bank_gentle_curve, curves.MEDIUM_TURN_GENTLE_LENGTH),
+    (curves.medium_turn_right_bank_gentle_curve, curves.MEDIUM_TURN_GENTLE_LENGTH),
+    (curves.large_turn_left_bank_to_diag_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.large_turn_right_bank_to_diag_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.large_turn_left_bank_to_orthogonal_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.large_turn_right_bank_to_orthogonal_gentle_curve, curves.LARGE_TURN_GENTLE_LENGTH),
+    (curves.small_turn_left_bank_to_gentle_curve, curves.TURN_BANK_TRANSITION_LENGTH),
+    (curves.small_turn_right_bank_to_gentle_curve, curves.TURN_BANK_TRANSITION_LENGTH),
+]
+
+
+@pytest.mark.parametrize("curve,length", _BATCH_H_CURVES)
+def test_gentle_turn_curves_orthonormal_and_climb(curve, length):
+    d = np.linspace(0.0, length, 10)
+    tp = curve(d)
+    _assert_orthonormal(tp)
+    assert tp.position[-1, 1] > tp.position[0, 1]  # net climb
+
+
+_BATCH_I_CURVES = [
+    (curves.very_small_turn_left_steep_curve, curves.VERY_SMALL_TURN_STEEP_LENGTH),
+    (curves.very_small_turn_right_steep_curve, curves.VERY_SMALL_TURN_STEEP_LENGTH),
+    (curves.small_turn_left_steep_curve, curves.SMALL_TURN_STEEP_LENGTH),
+    (curves.small_turn_right_steep_curve, curves.SMALL_TURN_STEEP_LENGTH),
+    (curves.large_turn_left_to_diag_steep_curve, curves.LARGE_TURN_STEEP_LENGTH),
+    (curves.large_turn_right_to_diag_steep_curve, curves.LARGE_TURN_STEEP_LENGTH),
+    (curves.large_turn_left_to_orthogonal_steep_curve, curves.LARGE_TURN_STEEP_LENGTH),
+    (curves.large_turn_right_to_orthogonal_steep_curve, curves.LARGE_TURN_STEEP_LENGTH),
+]
+
+
+@pytest.mark.parametrize("curve,length", _BATCH_I_CURVES)
+def test_steep_turn_curves_orthonormal_and_climb(curve, length):
+    d = np.linspace(0.0, length, 10)
+    tp = curve(d)
+    _assert_orthonormal(tp)
+    assert tp.position[-1, 1] > tp.position[0, 1]  # net climb (steep)
+
+
+@pytest.mark.parametrize(
+    "curve,length",
+    [
+        (curves.small_flat_to_steep_curve, curves.SMALL_FLAT_TO_STEEP_LENGTH),
+        (curves.small_steep_to_flat_curve, curves.SMALL_FLAT_TO_STEEP_LENGTH),
+        (curves.small_flat_to_steep_diag_curve, curves.SMALL_FLAT_TO_STEEP_DIAG_LENGTH),
+        (curves.small_steep_to_flat_diag_curve, curves.SMALL_FLAT_TO_STEEP_DIAG_LENGTH),
+        (curves.flat_to_steep_diag_curve, curves.FLAT_TO_STEEP_DIAG_LENGTH),
+        (curves.steep_to_flat_diag_curve, curves.FLAT_TO_STEEP_DIAG_LENGTH),
+        (curves.steep_to_vertical_diag_curve, curves.STEEP_TO_VERTICAL_DIAG_LENGTH),
+        (curves.vertical_to_steep_diag_curve, curves.STEEP_TO_VERTICAL_DIAG_LENGTH),
+        (curves.vertical_diag_curve, curves.VERTICAL_LENGTH),
+    ],
+)
+def test_batch_j_slope_transitions_orthonormal_and_climb(curve, length):
+    d = np.linspace(0.0, length, 10)
+    tp = curve(d)
+    _assert_orthonormal(tp)
+    assert tp.position[-1, 1] > tp.position[0, 1]  # net climb
+
+
+@pytest.mark.parametrize(
+    "left_curve,right_curve,length",
+    [
+        (curves.gentle_left_bank_to_steep_curve, curves.gentle_right_bank_to_steep_curve,
+         curves.GENTLE_TO_STEEP_LENGTH),
+        (curves.steep_to_gentle_left_bank_curve, curves.steep_to_gentle_right_bank_curve,
+         curves.GENTLE_TO_STEEP_LENGTH),
+        (curves.gentle_left_bank_to_steep_diag_curve, curves.gentle_right_bank_to_steep_diag_curve,
+         curves.GENTLE_TO_STEEP_DIAG_LENGTH),
+        (curves.steep_to_gentle_left_bank_diag_curve, curves.steep_to_gentle_right_bank_diag_curve,
+         curves.GENTLE_TO_STEEP_DIAG_LENGTH),
+    ],
+)
+def test_steep_bank_transitions_orthonormal_and_mirror(left_curve, right_curve, length):
+    d = np.linspace(0.0, length, 8)
+    left = left_curve(d)
+    right = right_curve(d)
+    _assert_orthonormal(left)
+    _assert_orthonormal(right)
+    # Same base path, opposite bank: position is shared; the banks tilt opposite ways.
+    np.testing.assert_allclose(left.position, right.position, atol=1e-9)
+    assert not np.allclose(left.normal, right.normal)
+
+
+@pytest.mark.parametrize(
+    "curve,length",
+    [
+        (curves.banked_barrel_roll_left_curve, curves.BARREL_ROLL_LENGTH),
+        (curves.banked_barrel_roll_right_curve, curves.BARREL_ROLL_LENGTH),
+        (curves.banked_inline_twist_left_curve, curves.INLINE_TWIST_LENGTH),
+        (curves.banked_inline_twist_right_curve, curves.INLINE_TWIST_LENGTH),
+        (curves.banked_zero_g_roll_left_curve, curves.ZERO_G_ROLL_LENGTH),
+        (curves.banked_zero_g_roll_right_curve, curves.ZERO_G_ROLL_LENGTH),
+        (curves.dive_loop_90_left_curve, curves.DIVE_LOOP_90_LENGTH),
+        (curves.dive_loop_90_right_curve, curves.DIVE_LOOP_90_LENGTH),
+    ],
+)
+def test_batch_l_inversions_orthonormal(curve, length):
+    _assert_orthonormal(curve(np.linspace(0.0, length, 16)))
+
+
+def test_dive_loop_90_mirrors():
+    d = np.linspace(0.0, curves.DIVE_LOOP_90_LENGTH, 8)
+    left = curves.dive_loop_90_left_curve(d)
+    right = curves.dive_loop_90_right_curve(d)
+    np.testing.assert_allclose(right.position[:, 0], -left.position[:, 0], atol=1e-9)
+
+
+def test_gentle_turns_sweep_yaw_and_mirror():
+    d = np.linspace(0.0, curves.SMALL_TURN_GENTLE_LENGTH, 8)
+    left = curves.small_turn_left_gentle_curve(d)
+    right = curves.small_turn_right_gentle_curve(d)
+    # Left turns toward -... and right mirrors its X position.
+    np.testing.assert_allclose(right.position[:, 0], -left.position[:, 0], atol=1e-9)
+    np.testing.assert_allclose(right.position[:, 1], left.position[:, 1], atol=1e-9)
+
+
 def test_banked_curve_rolls_frame_and_stays_orthonormal():
     from openrct2_track_generator.constants import BANK_ANGLE
 
