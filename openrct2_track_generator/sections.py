@@ -8,7 +8,7 @@ arc lengths are copied from ``track_sections.cpp``'s ``const track_section_t`` t
 """
 
 from . import curves
-from .constants import TrackFlag
+from .constants import SpecialModel, TrackFlag
 from .types import TrackSection
 
 __all__ = ["SECTION_REGISTRY", "resolve_section"]
@@ -37,16 +37,23 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
         curves.SMALL_TURN_LENGTH,
         flags=TrackFlag.EXIT_90_DEG_LEFT,
     ),
-    # --- Batch A: brakes/booster (flat geometry; the brake mechanism mesh is deferred),
+    # --- Batch A: brakes/booster (flat geometry + a tiled special mechanism mesh),
     #     reverse + large slope transitions, and vertical. ---
-    "brake": TrackSection("brake", curves.flat_curve, curves.FLAT_LENGTH, chain="flat"),
+    "brake": TrackSection(
+        "brake", curves.flat_curve, curves.FLAT_LENGTH, chain="flat", special=SpecialModel.BRAKE
+    ),
     "magnetic_brake": TrackSection(
-        "magnetic_brake", curves.flat_curve, curves.FLAT_LENGTH, chain="flat"
+        "magnetic_brake", curves.flat_curve, curves.FLAT_LENGTH, chain="flat",
+        special=SpecialModel.MAGNETIC_BRAKE,
     ),
     "block_brake": TrackSection(
-        "block_brake", curves.flat_curve, curves.FLAT_LENGTH, chain="flat"
+        "block_brake", curves.flat_curve, curves.FLAT_LENGTH, chain="flat",
+        special=SpecialModel.BLOCK_BRAKE,
     ),
-    "booster": TrackSection("booster", curves.flat_curve, curves.FLAT_LENGTH, chain="flat"),
+    "booster": TrackSection(
+        "booster", curves.flat_curve, curves.FLAT_LENGTH, chain="flat",
+        special=SpecialModel.BOOSTER,
+    ),
     "gentle_to_flat": TrackSection(
         "gentle_to_flat", curves.gentle_to_flat_curve, curves.FLAT_TO_GENTLE_LENGTH, chain="flat"
     ),
@@ -74,18 +81,21 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
         curves.vertical_curve,
         curves.VERTICAL_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.NO_SUPPORTS,
+        special=SpecialModel.VERTICAL,
     ),
     "steep_to_vertical": TrackSection(
         "steep_to_vertical",
         curves.steep_to_vertical_curve,
         curves.STEEP_TO_VERTICAL_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.NO_SUPPORTS | TrackFlag.ALT_INVERT,
+        special=SpecialModel.STEEP_TO_VERTICAL,
     ),
     "vertical_to_steep": TrackSection(
         "vertical_to_steep",
         curves.vertical_to_steep_curve,
         curves.STEEP_TO_VERTICAL_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.NO_SUPPORTS,
+        special=SpecialModel.VERTICAL_TO_STEEP,
     ),
     # --- Batch B: flat turns (right turns of small/medium are game-mirrored, so only
     #     left exists; the large orthogonal<->diagonal turns have both). ---
@@ -606,18 +616,22 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
     "barrel_roll_left": TrackSection(
         "barrel_roll_left", curves.barrel_roll_left_curve, curves.BARREL_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.BARREL_ROLL_LEFT,
     ),
     "barrel_roll_right": TrackSection(
         "barrel_roll_right", curves.barrel_roll_right_curve, curves.BARREL_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.BARREL_ROLL_RIGHT,
     ),
     "corkscrew_left": TrackSection(
         "corkscrew_left", curves.corkscrew_left_curve, curves.CORKSCREW_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.EXIT_90_DEG_LEFT,
+        special=SpecialModel.CORKSCREW_LEFT,
     ),
     "corkscrew_right": TrackSection(
         "corkscrew_right", curves.corkscrew_right_curve, curves.CORKSCREW_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.EXIT_90_DEG_RIGHT,
+        special=SpecialModel.CORKSCREW_RIGHT,
     ),
     "inline_twist_left": TrackSection(
         "inline_twist_left", curves.inline_twist_left_curve, curves.INLINE_TWIST_LENGTH,
@@ -638,10 +652,12 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
     "quarter_loop": TrackSection(
         "quarter_loop", curves.quarter_loop_curve, curves.QUARTER_LOOP_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_180_DEG,
+        special=SpecialModel.QUARTER_LOOP,
     ),
     "half_loop": TrackSection(
         "half_loop", curves.half_loop_curve, curves.HALF_LOOP_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_180_DEG,
+        special=SpecialModel.HALF_LOOP,
     ),
     "medium_half_loop_left": TrackSection(
         "medium_half_loop_left", curves.medium_half_loop_left_curve,
@@ -666,22 +682,26 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
     "zero_g_roll_left": TrackSection(
         "zero_g_roll_left", curves.zero_g_roll_left_curve, curves.ZERO_G_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.ZERO_G_ROLL_LEFT,
     ),
     "zero_g_roll_right": TrackSection(
         "zero_g_roll_right", curves.zero_g_roll_right_curve, curves.ZERO_G_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.ZERO_G_ROLL_RIGHT,
     ),
     "large_zero_g_roll_left": TrackSection(
         "large_zero_g_roll_left", curves.large_zero_g_roll_left_curve,
         curves.LARGE_ZERO_G_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK
         | TrackFlag.ALT_INVERT | TrackFlag.ALT_PREFER_ODD,
+        special=SpecialModel.LARGE_ZERO_G_ROLL_LEFT,
     ),
     "large_zero_g_roll_right": TrackSection(
         "large_zero_g_roll_right", curves.large_zero_g_roll_right_curve,
         curves.LARGE_ZERO_G_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK
         | TrackFlag.ALT_INVERT | TrackFlag.ALT_PREFER_ODD,
+        special=SpecialModel.LARGE_ZERO_G_ROLL_RIGHT,
     ),
     "dive_loop_45_left": TrackSection(
         "dive_loop_45_left", curves.dive_loop_45_left_curve, curves.DIVE_LOOP_45_LENGTH,
@@ -695,11 +715,13 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
         "vertical_twist_left", curves.vertical_twist_left_curve, curves.VERTICAL_TWIST_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.NO_SUPPORTS
         | TrackFlag.EXIT_90_DEG_LEFT,
+        special=SpecialModel.VERTICAL_TWIST_LEFT,
     ),
     "vertical_twist_right": TrackSection(
         "vertical_twist_right", curves.vertical_twist_right_curve, curves.VERTICAL_TWIST_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.OFFSET_SPRITE_MASK | TrackFlag.NO_SUPPORTS
         | TrackFlag.EXIT_90_DEG_RIGHT,
+        special=SpecialModel.VERTICAL_TWIST_RIGHT,
     ),
     "vertical_twist_left_to_diag": TrackSection(
         "vertical_twist_left_to_diag", curves.vertical_twist_left_to_diag_curve,
@@ -724,19 +746,23 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
     "vertical_loop_left": TrackSection(
         "vertical_loop_left", curves.vertical_loop_left_curve, curves.VERTICAL_LOOP_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_180_DEG,
+        special=SpecialModel.HALF_LOOP,
     ),
     "vertical_loop_right": TrackSection(
         "vertical_loop_right", curves.vertical_loop_right_curve, curves.VERTICAL_LOOP_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_180_DEG,
+        special=SpecialModel.HALF_LOOP,
     ),
     # Batch L: banked inversions
     "banked_barrel_roll_left": TrackSection(
         "banked_barrel_roll_left", curves.banked_barrel_roll_left_curve, curves.BARREL_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.BARREL_ROLL_LEFT,
     ),
     "banked_barrel_roll_right": TrackSection(
         "banked_barrel_roll_right", curves.banked_barrel_roll_right_curve,
         curves.BARREL_ROLL_LENGTH, flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.BARREL_ROLL_RIGHT,
     ),
     "banked_inline_twist_left": TrackSection(
         "banked_inline_twist_left", curves.banked_inline_twist_left_curve,
@@ -749,10 +775,12 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
     "banked_zero_g_roll_left": TrackSection(
         "banked_zero_g_roll_left", curves.banked_zero_g_roll_left_curve, curves.ZERO_G_ROLL_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.ZERO_G_ROLL_LEFT,
     ),
     "banked_zero_g_roll_right": TrackSection(
         "banked_zero_g_roll_right", curves.banked_zero_g_roll_right_curve,
         curves.ZERO_G_ROLL_LENGTH, flags=TrackFlag.NO_SUPPORTS | TrackFlag.OFFSET_SPRITE_MASK,
+        special=SpecialModel.ZERO_G_ROLL_RIGHT,
     ),
     # Batch L: 90 degree dive loops
     "dive_loop_90_left": TrackSection(
@@ -763,42 +791,50 @@ SECTION_REGISTRY: dict[str, TrackSection] = {
         "dive_loop_90_right", curves.dive_loop_90_right_curve, curves.DIVE_LOOP_90_LENGTH,
         flags=TrackFlag.NO_SUPPORTS | TrackFlag.EXIT_90_DEG_RIGHT,
     ),
-    # Batch L: brakes / boosters / misc (reuse base curves; special models render as plain track)
+    # Batch L: brakes / boosters / misc. Tiled brake/booster mechanism meshes render via
+    # ``special=``; launched_lift / vertical_booster use the rigid special branch (deferred,
+    # so they still render as plain track for now).
     "flat_asymmetric": TrackSection(
         "flat_asymmetric", curves.flat_curve, curves.FLAT_LENGTH, chain="flat",
     ),
     "brake_gentle": TrackSection(
         "brake_gentle", curves.gentle_curve, curves.GENTLE_LENGTH, chain="gentle",
+        special=SpecialModel.BRAKE,
     ),
     "magnetic_brake_gentle": TrackSection(
         "magnetic_brake_gentle", curves.gentle_curve, curves.GENTLE_LENGTH, chain="gentle",
+        special=SpecialModel.MAGNETIC_BRAKE,
     ),
     "launched_lift": TrackSection(
         "launched_lift", curves.gentle_curve, curves.GENTLE_LENGTH, chain="gentle",
+        special=SpecialModel.LAUNCHED_LIFT,
     ),
     "vertical_booster": TrackSection(
         "vertical_booster", curves.vertical_curve, curves.VERTICAL_LENGTH,
         flags=TrackFlag.VERTICAL | TrackFlag.NO_SUPPORTS,
+        special=SpecialModel.VERTICAL_BOOSTER,
     ),
     "brake_diag": TrackSection(
         "brake_diag", curves.flat_diag_curve, curves.FLAT_DIAG_LENGTH,
-        flags=TrackFlag.DIAGONAL, chain="flat_diag",
+        flags=TrackFlag.DIAGONAL, chain="flat_diag", special=SpecialModel.BRAKE,
     ),
     "block_brake_diag": TrackSection(
         "block_brake_diag", curves.flat_diag_curve, curves.FLAT_DIAG_LENGTH,
-        flags=TrackFlag.DIAGONAL, chain="flat_diag",
+        flags=TrackFlag.DIAGONAL, chain="flat_diag", special=SpecialModel.BLOCK_BRAKE,
     ),
     "magnetic_brake_diag": TrackSection(
         "magnetic_brake_diag", curves.flat_diag_curve, curves.FLAT_DIAG_LENGTH,
-        flags=TrackFlag.DIAGONAL, chain="flat_diag",
+        flags=TrackFlag.DIAGONAL, chain="flat_diag", special=SpecialModel.MAGNETIC_BRAKE,
     ),
     "brake_gentle_diag": TrackSection(
         "brake_gentle_diag", curves.gentle_diag_curve, curves.GENTLE_DIAG_LENGTH,
         flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE, chain="flat_diag",
+        special=SpecialModel.BRAKE,
     ),
     "magnetic_brake_gentle_diag": TrackSection(
         "magnetic_brake_gentle_diag", curves.gentle_diag_curve, curves.GENTLE_DIAG_LENGTH,
         flags=TrackFlag.DIAGONAL | TrackFlag.SUPPORT_BASE, chain="flat_diag",
+        special=SpecialModel.MAGNETIC_BRAKE,
     ),
 }
 

@@ -4,7 +4,13 @@ import json
 
 import pytest
 from openrct2_object_common.config import LoadError
-from openrct2_track_generator.loader import build_track, load_track, load_track_meshes
+from openrct2_track_generator.constants import TILE_SIZE
+from openrct2_track_generator.loader import (
+    build_track,
+    load_special_models,
+    load_track,
+    load_track_meshes,
+)
 from openrct2_x7_renderer.mesh import Mesh
 
 
@@ -132,3 +138,53 @@ def test_load_track_meshes_validates():
         load_track_meshes({})
     with pytest.raises(LoadError, match="Mesh path"):
         load_track_meshes({"meshes": [123]})
+
+
+def test_load_special_models_absent_returns_empty():
+    assert load_special_models(_config()) == {}
+
+
+def test_load_special_models_not_dict_raises():
+    with pytest.raises(LoadError, match="special_models"):
+        load_special_models(_config(special_models=["brake.obj"]))
+
+
+def test_load_special_models_non_string_path_raises():
+    with pytest.raises(LoadError, match="path string"):
+        load_special_models(_config(special_models={"brake": 5}))
+
+
+def test_load_special_models_loads_meshes(tmp_path):
+    (tmp_path / "brake.obj").write_text("v 1 0 0\nv 0 0 0\nv 0 1 0\nf 1 2 3\n")
+    out = load_special_models({"special_models": {"brake": "brake.obj"}}, base_dir=tmp_path)
+    assert "brake" in out and isinstance(out["brake"], Mesh)
+
+
+def test_brake_length_defaults_to_one_tile():
+    assert build_track(_config(), _meshes()).brake_length == TILE_SIZE
+
+
+def test_brake_length_scaled_by_tile_size():
+    track = build_track(_config(brake_length=0.5), _meshes())
+    assert track.brake_length == 0.5 * TILE_SIZE
+
+
+def test_build_track_accepts_special_models():
+    sm = {"brake": Mesh.empty()}
+    assert build_track(_config(), _meshes(), special_models=sm).special_models is sm
+
+
+def test_supports_defaults():
+    track = build_track(_config(), _meshes())
+    assert track.has_supports is False
+    assert track.support_spacing == TILE_SIZE
+    assert track.pivot == 0.0
+
+
+def test_supports_config_parsed_and_scaled():
+    track = build_track(
+        _config(flags=["has_supports"], support_spacing=0.8, pivot=0.1), _meshes()
+    )
+    assert track.has_supports is True
+    assert track.support_spacing == 0.8 * TILE_SIZE
+    assert track.pivot == 0.1 * TILE_SIZE

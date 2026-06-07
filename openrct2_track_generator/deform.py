@@ -31,6 +31,13 @@ def _to_render_space(arr: NDArray[np.float64]) -> NDArray[np.float64]:
     return arr[:, ::-1].copy()
 
 
+def _normalize_rows(arr: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Row-wise normalize an ``(N, 3)`` array; zero-length rows are left as zero."""
+    n = np.linalg.norm(arr, axis=1, keepdims=True)
+    n[n == 0.0] = 1.0
+    return arr / n
+
+
 def get_track_point_array(
     curve: CurveFn,
     flags: TrackFlag,
@@ -85,6 +92,7 @@ def deform_mesh(
     flat_shaded: bool = False,
     start_offset: NDArray[np.float64] | None = None,
     end_offset: NDArray[np.float64] | None = None,
+    base: bool = False,
 ) -> Mesh:
     """Bend ``mesh`` along ``section``'s curve, returning a new deformed Mesh.
 
@@ -93,6 +101,11 @@ def deform_mesh(
     one-tile mesh fills exactly one section); pass an explicit ``scale``/``offset`` to
     override. ``z_offset`` defaults to the section's own. With ``flat_shaded`` every
     normal uses the section's central frame (matching the legacy flat-shaded path).
+
+    ``base`` selects ``track.cpp``'s ``base_transform`` frame (for the support base
+    model): the cross-section uprights to world-Y and the binormal is taken horizontal
+    (``normalize(cross((0,1,0), tangent))``), so the base sits level regardless of the
+    track's bank.
     """
     if mesh.faces.shape[0] == 0 or mesh.vertices.shape[0] == 0:
         return mesh
@@ -122,18 +135,27 @@ def deform_mesh(
 
     x = verts[:, 0:1]
     y = verts[:, 1:2]
-    world = tp.position + tp.normal * y + tp.binormal * x
-    out_verts = _to_render_space(world)
-
     nx = norms[:, 0:1]
     ny = norms[:, 1:2]
     nz = norms[:, 2:3]
-    if flat_shaded:
-        central = np.array([np.clip(offset + track_length / 2.0, 0.0, length)])
-        c = section.curve(central)
-        frame_n = c.tangent[0] * nz + c.normal[0] * ny + c.binormal[0] * nx
+
+    if base:
+        # base_transform: upright cross-section, horizontal binormal from the tangent.
+        up = np.array([0.0, 1.0, 0.0])
+        binormal = _normalize_rows(np.cross(up, tp.tangent))
+        normal = _normalize_rows(np.cross(tp.tangent, binormal))
+        world = tp.position + up[None, :] * y + binormal * x
+        frame_n = tp.tangent * nz + normal * ny + binormal * nx
     else:
-        frame_n = tp.tangent * nz + tp.normal * ny + tp.binormal * nx
+        world = tp.position + tp.normal * y + tp.binormal * x
+        if flat_shaded:
+            central = np.array([np.clip(offset + track_length / 2.0, 0.0, length)])
+            c = section.curve(central)
+            frame_n = c.tangent[0] * nz + c.normal[0] * ny + c.binormal[0] * nx
+        else:
+            frame_n = tp.tangent * nz + tp.normal * ny + tp.binormal * nx
+
+    out_verts = _to_render_space(world)
     out_norms = _to_render_space(frame_n)
     nl = np.linalg.norm(out_norms, axis=1, keepdims=True)
     nl[nl == 0.0] = 1.0

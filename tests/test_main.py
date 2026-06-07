@@ -19,8 +19,11 @@ def _args(input_path, test=False, skip_render=False):
 def _patch_build_track(monkeypatch):
     monkeypatch.setattr(cli, "load_track_meshes", lambda root: [])
     monkeypatch.setattr(cli, "load_preview", lambda root: None)
+    monkeypatch.setattr(cli, "load_special_models", lambda root: {})
     monkeypatch.setattr(
-        cli, "build_track", lambda root, meshes, preview: types.SimpleNamespace(units_per_tile=3.3)
+        cli,
+        "build_track",
+        lambda root, meshes, preview, special_models: types.SimpleNamespace(units_per_tile=3.3),
     )
 
 

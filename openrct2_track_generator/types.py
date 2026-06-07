@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import TILE_SIZE, TrackFlag
+from .constants import TILE_SIZE, SpecialModel, TrackFlag
 
 if TYPE_CHECKING:
     from openrct2_x7_renderer.mesh import Mesh
@@ -62,6 +62,8 @@ class TrackSection:
     z_offset: float = 0.0
     # Lift-hill chain pattern name ("flat"/"gentle"), or None if the piece has no chain.
     chain: str | None = None
+    # Special-mechanism model (brake/booster/...) rendered on top of the track, or None.
+    special: SpecialModel | None = None
 
 
 @dataclass
@@ -88,6 +90,22 @@ class Track:
     # Separate solid occlusion-volume mesh for the track-mask silhouette (split/transfer
     # front/behind sub-sprites). -1 = none, so occlusion ops are skipped.
     mask_mesh_index: int = -1
+
+    # Special-mechanism meshes (brake/block_brake/booster/magnetic_brake), keyed by the
+    # model name in :data:`constants.SPECIAL_MODEL_KEY`. A section with a ``special`` whose
+    # key is present here renders that mesh tiled on top of the track (maketrack's
+    # ``TRACK_SPECIAL_MASK`` branch); absent keys fall back to plain track.
+    special_models: dict[str, Mesh] = field(default_factory=dict)
+    # Tile length for tiled specials (brake mechanism); block_brake always tiles by one tile.
+    brake_length: float = TILE_SIZE
+
+    # Supports (track.cpp): with ``has_supports`` a section without TRACK_NO_SUPPORTS gets a
+    # per-tile base model (``support_base`` in ``special_models``) plus support posts spaced
+    # ``support_spacing`` apart, banked per the entry/exit bank. ``pivot`` is the post pivot
+    # height used to lower posts under pitched track. (All inert without ``has_supports``.)
+    has_supports: bool = False
+    support_spacing: float = TILE_SIZE
+    pivot: float = 0.0
 
     sections: list[TrackSection] = field(default_factory=list)
     flat_shaded: bool = False

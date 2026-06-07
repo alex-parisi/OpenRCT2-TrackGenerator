@@ -63,8 +63,34 @@ def _build_sections(root: dict[str, Any]) -> list[Any]:
     return out
 
 
+def load_special_models(
+    root: dict[str, Any], base_dir: Path | None = None
+) -> dict[str, Mesh]:
+    """Load the optional ``special_models`` map (name -> mesh path) with the load rotation.
+
+    Mirrors maketrack's named brake/booster model loading; keys are the model names in
+    :data:`constants.SPECIAL_MODEL_KEY` (``brake`` / ``block_brake`` / ``booster`` /
+    ``magnetic_brake``). Absent = no special meshes (specials fall back to plain track).
+    """
+    raw = root.get("special_models")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise LoadError('Property "special_models" must be an object of name -> path')
+    out: dict[str, Mesh] = {}
+    for name, path in raw.items():
+        if not isinstance(path, str):
+            raise LoadError(f'special_models["{name}"] must be a path string')
+        resolved = Path(path) if base_dir is None or Path(path).is_absolute() else base_dir / path
+        out[name] = load_mesh(resolved, transform=_MESH_LOAD_TRANSFORM)
+    return out
+
+
 def build_track(
-    config: dict[str, Any], meshes: list[Mesh], preview: IndexedImage | None = None
+    config: dict[str, Any],
+    meshes: list[Mesh],
+    preview: IndexedImage | None = None,
+    special_models: dict[str, Mesh] | None = None,
 ) -> Track:
     """Build a Track from an already-parsed config dict + in-memory meshes."""
     root = config
@@ -88,6 +114,18 @@ def build_track(
     track.flat_shaded = optional_bool(root, "flat_shaded", False)
     track.z_offset = optional_number(root, "z_offset", 0.0)
     track.has_lift = "has_lift" in optional_string_list(root, "flags")
+
+    # brake_length is a tile fraction scaled to model units (default one tile, matching
+    # maketrack's TILE_SIZE scale); drives the tiling of brake/booster special meshes.
+    track.brake_length = optional_number(root, "brake_length", 1.0) * TILE_SIZE
+    if special_models is not None:
+        track.special_models = special_models
+
+    # Supports: a "has_supports" flag enables the per-tile base + posts; support_spacing/pivot
+    # are tile fractions scaled to model units (maketrack's TILE_SIZE scale).
+    track.has_supports = "has_supports" in optional_string_list(root, "flags")
+    track.support_spacing = optional_number(root, "support_spacing", 1.0) * TILE_SIZE
+    track.pivot = optional_number(root, "pivot", 0.0) * TILE_SIZE
 
     track.meshes = list(meshes)
     track.track_mesh_index = optional_int(root, "track_mesh_index", 0)
@@ -115,4 +153,6 @@ def build_track(
 def load_track(json_path: Path | str) -> Track:
     """Parse a config file, load its meshes + preview from disk, build a Track."""
     root = parse_config(json_path)
-    return build_track(root, load_track_meshes(root), load_preview(root))
+    return build_track(
+        root, load_track_meshes(root), load_preview(root), load_special_models(root)
+    )

@@ -16,10 +16,20 @@ from openrct2_x7_renderer.mesh import Mesh
 from openrct2_x7_renderer.ray_trace import VIEWS, Context, FinalizedScene
 from openrct2_x7_renderer.types import IndexedImage
 
-from .constants import CLEARANCE_HEIGHT, TILE_SIZE, TrackFlag
+from .constants import (
+    CLEARANCE_HEIGHT,
+    SPECIAL_MODEL_KEY,
+    SPECIAL_RIGHT_NO_FLIP,
+    SPECIAL_TILED,
+    SUPPORT_BASE_KEY,
+    TILE_SIZE,
+    SpecialModel,
+    TrackFlag,
+)
 from .deform import deform_mesh
 from .lift import CHAIN_PATTERNS, ChainPattern, apply_lift
 from .masks import ViewMask, carve
+from .supports import support_posts
 from .types import Track, TrackSection
 
 __all__ = ["angle_plan", "render_section"]
@@ -58,6 +68,11 @@ def _build_scene(
     is_mask: bool,
     z_offset: float,
     occluder: Mesh | None = None,
+    special_mesh: Mesh | None = None,
+    special_length: float = TILE_SIZE,
+    rigid_special: tuple[Mesh, np.ndarray, np.ndarray] | None = None,
+    base_mesh: Mesh | None = None,
+    posts: list[tuple[Mesh, np.ndarray, np.ndarray]] | None = None,
 ) -> FinalizedScene:
     """Tile ``mesh`` along the section with ghost end-caps + extrude/mask_end handling.
 
@@ -94,10 +109,43 @@ def _build_scene(
     # The drawn copies (extended by one for each extrude flag / mask_end).
     count = num + int(view_mask.extrude_behind) + int(view_mask.extrude_in_front)
     count += int(view_mask.mask_end)
+    sflag = _MASK if is_mask else 0
     for i in range(count):
         offset = (i - (1 if view_mask.extrude_behind else 0)) * length
         ghost_last = (not is_mask) and view_mask.mask_end and (i + 1 == count)
         add(offset, _GHOST if ghost_last else 0, with_occluder=is_mask)
+        # Per-tile support base (track.cpp:356-357): a curve-deformed model on its own
+        # upright frame, drawn with the track (occluder in the silhouette).
+        if base_mesh is not None and not ghost_last:
+            bcopy = deform_mesh(
+                base_mesh, section, scale=scale, offset=offset, track_length=section.length,
+                z_offset=z_offset, flat_shaded=flat_shaded, base=True,
+            )
+            builder.add_model(bcopy, _IDENTITY, _ORIGIN, sflag)
+
+    # Special-mechanism mesh (brake/booster) tiled on top of the track by its own length
+    # (track.cpp:381-400). Drawn for the visible render, an occluder for the silhouette.
+    if special_mesh is not None:
+        snum = max(1, int(np.floor(0.5 + section.length / special_length)))
+        sscale = section.length / (snum * special_length)
+        sstep = sscale * special_length
+        for i in range(snum):
+            scopy = deform_mesh(
+                special_mesh, section, scale=sscale, offset=i * sstep,
+                track_length=section.length, z_offset=z_offset, flat_shaded=flat_shaded,
+            )
+            builder.add_model(scopy, _IDENTITY, _ORIGIN, sflag)
+
+    # Rigid special support model (inversions / launched_lift): a single model placed with a
+    # fixed view[1]-based transform, not deformed along the curve (track.cpp:401).
+    if rigid_special is not None:
+        rmesh, rmat, rtrans = rigid_special
+        builder.add_model(rmesh, rmat, rtrans, sflag)
+
+    # Support posts (track.cpp:405-437): rigid models placed at intervals along the section.
+    if posts is not None:
+        for pmesh, pmat, ptrans in posts:
+            builder.add_model(pmesh, pmat, ptrans, sflag)
 
     return builder.finalize()
 
@@ -137,6 +185,42 @@ def render_section(
     z_offset_int = int(track.z_offset + 0.499999)
     mask_dy = (z_offset_int - 8) if (section.flags & TrackFlag.OFFSET_SPRITE_MASK) else 0
 
+    # Tiled special-mechanism mesh (brake/booster): resolve the model + its tile length
+    # (block_brake tiles by one tile, others by brake_length). Missing model -> plain track.
+    special_mesh: Mesh | None = None
+    special_length = track.brake_length
+    rigid_special: tuple[Mesh, np.ndarray, np.ndarray] | None = None
+    if section.special in SPECIAL_TILED:
+        special_mesh = track.special_models.get(SPECIAL_MODEL_KEY[section.special])
+        if section.special is SpecialModel.BLOCK_BRAKE:
+            special_length = TILE_SIZE
+    elif section.special is not None:
+        # Rigid support model (inversions / launched_lift). Placed with views[1]; all but the
+        # *_RIGHT variants flip the matrix bottom row. Translation centres across-track (unless
+        # vertical) and drops by 2 clearance heights below the track z_offset (track.cpp:401).
+        rmesh = track.special_models.get(SPECIAL_MODEL_KEY[section.special])
+        if rmesh is not None:
+            rmat = VIEWS[1].copy()
+            if section.special not in SPECIAL_RIGHT_NO_FLIP:
+                rmat[2] = -rmat[2]
+            tx = 0.0 if (section.flags & TrackFlag.VERTICAL) else -0.5 * TILE_SIZE
+            rtrans = np.array([tx, z_offset - 2.0 * CLEARANCE_HEIGHT, 0.0], dtype=np.float64)
+            rigid_special = (rmesh, rmat, rtrans)
+
+    # Supports: per-tile base model + support posts, when the track enables supports and the
+    # section permits them (track.cpp:356-357, 405-437). Posts whose bank model isn't supplied
+    # are dropped (maketrack leaves them as empty meshes).
+    base_mesh: Mesh | None = None
+    posts: list[tuple[Mesh, np.ndarray, np.ndarray]] | None = None
+    if track.has_supports and not (section.flags & TrackFlag.NO_SUPPORTS):
+        base_mesh = track.special_models.get(SUPPORT_BASE_KEY)
+        resolved = [
+            (track.special_models[p.model_key], p.matrix, p.translation)
+            for p in support_posts(section, z_offset, track.support_spacing, track.pivot)
+            if p.model_key in track.special_models
+        ]
+        posts = resolved or None
+
     for angle, view_mask, chain in angle_plan(track, section, view_masks):
         silhouette: IndexedImage | None = None
         if track.mask_mesh_index >= 0 and view_mask.needs_silhouette:
@@ -144,7 +228,8 @@ def render_section(
             sil_scene = _build_scene(
                 context, mask_mesh, section, view_mask,
                 flat_shaded=track.flat_shaded, is_mask=True, z_offset=z_offset,
-                occluder=track_mesh,
+                occluder=track_mesh, special_mesh=special_mesh, special_length=special_length,
+                rigid_special=rigid_special, base_mesh=base_mesh, posts=posts,
             )
             try:
                 silhouette = sil_scene.render_silhouette(VIEWS[angle])
@@ -154,6 +239,8 @@ def render_section(
         scene = _build_scene(
             context, track_mesh, section, view_mask,
             flat_shaded=track.flat_shaded, is_mask=False, z_offset=z_offset,
+            special_mesh=special_mesh, special_length=special_length,
+            rigid_special=rigid_special, base_mesh=base_mesh, posts=posts,
         )
         try:
             full = scene.render_view(VIEWS[angle])
