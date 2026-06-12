@@ -33,7 +33,7 @@ def _to_render_space(arr: NDArray[np.float64]) -> NDArray[np.float64]:
 
 def _normalize_rows(arr: NDArray[np.float64]) -> NDArray[np.float64]:
     """Row-wise normalize an ``(N, 3)`` array; zero-length rows are left as zero."""
-    n = np.linalg.norm(arr, axis=1, keepdims=True)
+    n: NDArray[np.float64] = np.linalg.norm(arr, axis=1, keepdims=True)
     n[n == 0.0] = 1.0
     return arr / n
 
