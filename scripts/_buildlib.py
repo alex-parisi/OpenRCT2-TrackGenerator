@@ -23,7 +23,7 @@ ADDONS = {"track": "track_renderer_addon"}
 # `openrct2-x7-renderer>=...` dependency.
 RENDERER_DIST = "openrct2-x7-renderer"
 RENDERER_PREFIX = "openrct2_x7_renderer"
-RENDERER_VERSION = "0.3.2"
+RENDERER_VERSION = "0.3.3"
 
 # Shared layer (openrct2_object_common): PyPI dist name, wheel-filename prefix,
 # and the exact version to bundle. Pure Python (py3-none-any), so one wheel
