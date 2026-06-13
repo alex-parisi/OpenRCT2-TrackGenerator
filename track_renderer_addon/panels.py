@@ -33,8 +33,6 @@ class TG_PT_track(Panel):
         layout.prop(tt, "scale_preset")
         if tt.scale_preset == "CUSTOM":
             layout.prop(tt, "units_per_tile")
-        layout.prop(tt, "dither")
-
         box = layout.box()
         box.label(text="Identity", icon="INFO")
         box.prop(tt, "id")
@@ -43,6 +41,11 @@ class TG_PT_track(Panel):
         box.prop(tt, "authors")
         box.prop(tt, "version")
         box.prop(tt, "ride_type")
+
+        box = layout.box()
+        box.label(text="Dither", icon="MOD_NOISE")
+        box.prop(tt, "dither")
+        box.prop(tt, "dither_stability")
 
         box = layout.box()
         box.label(text="Track", icon="TOOL_SETTINGS")
@@ -71,8 +74,10 @@ class TG_PT_track(Panel):
         box = layout.box()
         row = box.row()
         row.prop(
-            tt, "show_lights",
-            icon="TRIA_DOWN" if tt.show_lights else "TRIA_RIGHT", emboss=False,
+            tt,
+            "show_lights",
+            icon="TRIA_DOWN" if tt.show_lights else "TRIA_RIGHT",
+            emboss=False,
         )
         row.label(text="", icon="LIGHT_SUN")
         if tt.show_lights:
@@ -144,8 +149,13 @@ def _draw_object_settings(layout, obj):
         return
     if len(obj.material_slots) > 1:
         box.template_list(
-            "MATERIAL_UL_matslots", "", obj, "material_slots",
-            obj, "active_material_index", rows=2,
+            "MATERIAL_UL_matslots",
+            "",
+            obj,
+            "material_slots",
+            obj,
+            "active_material_index",
+            rows=2,
         )
     mat = obj.active_material
     if mat is None:

@@ -67,9 +67,7 @@ OBJECT_ROLE_ITEMS = [
 # The named auxiliary models the core resolves by key (brake/booster specials +
 # the support base and bank posts + the rigid inversion supports). A SPECIAL
 # object is matched to the core by picking one of these.
-_SPECIAL_MODEL_NAMES = sorted(
-    {*SPECIAL_MODEL_KEY.values(), SUPPORT_BASE_KEY, *SUPPORT_BANK_KEY}
-)
+_SPECIAL_MODEL_NAMES = sorted({*SPECIAL_MODEL_KEY.values(), SUPPORT_BASE_KEY, *SUPPORT_BANK_KEY})
 SPECIAL_MODEL_ITEMS = [(n, n, "") for n in _SPECIAL_MODEL_NAMES]
 
 # Every section the generator knows; a track lists the ones it wants to emit.
@@ -107,9 +105,7 @@ class TGMaterialSettings(PropertyGroup):
     diffuse_color: FloatVectorProperty(
         name="Color", subtype="COLOR", size=3, min=0.0, max=1.0, default=(0.8, 0.8, 0.8)
     )
-    specular_intensity: FloatProperty(
-        name="Specular Intensity", default=0.5, min=0.0, soft_max=1.0
-    )
+    specular_intensity: FloatProperty(name="Specular Intensity", default=0.5, min=0.0, soft_max=1.0)
     specular_exponent: FloatProperty(
         name="Specular Exponent", default=50.0, min=1.0, soft_max=256.0
     )
@@ -167,18 +163,28 @@ class TGTrackSettings(PropertyGroup):
         default="REALISTIC",
         update=_scale_preset_update,
     )
-    units_per_tile: FloatProperty(
-        name="Units / Tile", default=TILE_SIZE, min=0.01, soft_max=16.0
-    )
+    units_per_tile: FloatProperty(name="Units / Tile", default=TILE_SIZE, min=0.01, soft_max=16.0)
     flat_shaded: BoolProperty(name="Flat Shaded", default=False)
     dither: EnumProperty(
         name="Dither",
         description=(
-            "Palette dithering mode. Bayer stays stable across animation frames; "
-            "Floyd-Steinberg has higher fidelity but its pattern shifts per frame"
+            "Palette dithering mode. Bayer and Blue noise stay stable across "
+            "animation frames; Floyd-Steinberg has higher fidelity but its pattern "
+            "shifts per frame"
         ),
         items=DITHER_MODE_ITEMS,
         default=DEFAULT_DITHER_MODE,
+    )
+    dither_stability: FloatProperty(
+        name="Dither Stability",
+        description=(
+            "Temporal-stability deadband in palette units. Shading changes smaller "
+            "than this quantise identically between frames, reducing dither "
+            "'swimming' in animations; 0 disables it"
+        ),
+        default=0.0,
+        min=0.0,
+        soft_max=16.0,
     )
 
     # --- Track placement ---------------------------------------------------
