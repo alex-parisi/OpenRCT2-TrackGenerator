@@ -91,6 +91,17 @@ class Track:
     # front/behind sub-sprites). -1 = none, so occlusion ops are skipped.
     mask_mesh_index: int = -1
 
+    # Separate ties (maketrack's TRACK_SEPARATE_TIE / TRACK_TIE_AT_BOUNDARY). ``separate_tie``
+    # places a rigid ``tie_mesh`` at each tile centre. ``tie_at_boundary`` (which implies
+    # ``separate_tie``) instead retiles the section so ties sit at tile boundaries, alternating
+    # the rigid tie + a deformed ``track_tie_mesh`` over each ``tie_length`` span with the plain
+    # track over the between-tie span. Meshes are indices into ``meshes`` (-1 = none).
+    separate_tie: bool = False
+    tie_at_boundary: bool = False
+    tie_mesh_index: int = -1
+    track_tie_mesh_index: int = -1
+    tie_length: float = TILE_SIZE
+
     # Special-mechanism meshes (brake/block_brake/booster/magnetic_brake), keyed by the
     # model name in :data:`constants.SPECIAL_MODEL_KEY`. A section with a ``special`` whose
     # key is present here renders that mesh tiled on top of the track (maketrack's
@@ -113,13 +124,41 @@ class Track:
     # Lift hill: overlays the chain pattern and expands flat's 2 views to 4 (one per
     # chain direction). Set from the config's ``flags`` list ("has_lift").
     has_lift: bool = False
+    # maketrack's ``lift_offset`` (default 13). Loaded for config parity but, as in maketrack
+    # itself, it is currently unused by the render path.
+    lift_offset: int = 13
 
     # Per-track vertical offset in 1/8-clearance-height units (maketrack's track z_offset);
     # the deform shifts y by ``(z_offset / 8) * CLEARANCE_HEIGHT``.
     z_offset: float = 0.0
 
+    # ``special_end_offsets`` smoothing (maketrack's TRACK_SPECIAL_OFFSETS): when set, each
+    # section's endpoints are nudged per the ``offset_table`` (a (10, 8) array: slope/bank
+    # category x 4 view angles x z/y pair) so adjacent pieces line up. Inert when the flag is
+    # unset or the table is all zeros. See :mod:`offsets`.
+    special_end_offsets: bool = False
+    offset_table: NDArray[np.float64] = field(
+        default_factory=lambda: np.zeros((10, 8), dtype=np.float64)
+    )
+
     # Path to the masks JSON used to carve per-view sub-sprites; empty = bundled default.
     masks_path: str = ""
+
+    # Sprite-manifest output (maketrack's sprite_directory / spritefile_in / spritefile_out).
+    # ``sprite_directory`` is the directory the PNGs go in and the prefix in each manifest
+    # ``path`` (default "images"). ``spritefile_in``, when set, is an existing manifest array
+    # the rendered sprites are appended to (the way maketrack places sprites at fixed global
+    # image indices); ``spritefile_out`` is where the merged manifest is written (default
+    # ``<id>.sprites.json``). Both resolve relative to the output directory if not absolute.
+    sprite_directory: str = ""
+    spritefile_in: str = ""
+    spritefile_out: str = ""
+
+    # Per-track sprite-filename suffix (maketrack appends the track's ``name`` as ``_<name>``).
+    # Empty for a single-track config (filenames stay ``<section>_<view>_<sub>.png``); set per
+    # entry in a multi-track file so colour-scheme/mesh variants share one manifest without
+    # filename collisions. Includes its own leading underscore (e.g. ``"_alt"``).
+    suffix: str = ""
 
     preview: IndexedImage | None = None
 

@@ -2,10 +2,13 @@
 
 import numpy as np
 from openrct2_object_common.testing import FakeContext
-from openrct2_track_generator.constants import TILE_SIZE
-from openrct2_track_generator.masks import load_section_masks
+from openrct2_track_generator.constants import TILE_SIZE, TrackFlag
+from openrct2_track_generator.masks import ViewMask, load_section_masks
 from openrct2_track_generator.section_renderer import (
+    _ORIGIN,
+    _build_boundary_ties,
     _section_layout,
+    _tie_boundary_flags,
     angle_plan,
     render_section,
 )
@@ -43,6 +46,109 @@ def test_layout_degenerate_z_uses_tile_size():
     mesh = _mesh([[0, 0, 2], [1, 0, 2], [0, 1, 2]])  # all z equal -> zero extent
     num, _scale, _length = _section_layout(mesh, SECTION_REGISTRY["flat"])
     assert num == 1
+
+
+def test_render_with_special_end_offsets_runs():
+    # With special_end_offsets the render computes per-view start/end offsets and threads
+    # them through the deform; a non-zero offset table must not break the render.
+    mesh = _mesh([[0, 0, 0], [0, 0, TILE_SIZE], [1, 0, 0]])
+    table = np.zeros((10, 8))
+    table[0, 1] = 0.5  # flat row, view-0 y nudge
+    track = Track(
+        meshes=[mesh], track_mesh_index=0, special_end_offsets=True, offset_table=table
+    )
+    ctx = FakeContext()
+    render_section(track, SECTION_REGISTRY["flat"], ctx, load_section_masks("flat"))
+    assert ("add", 0) in ctx.events  # drawn copies were produced
+
+
+def _add_count(ctx, flag=0):
+    return sum(1 for e in ctx.events if e == ("add", flag))
+
+
+def test_separate_tie_adds_one_rigid_tie_per_drawn_tile():
+    # With separate_tie the render adds a rigid tie per drawn tile on top of the track.
+    mesh = _mesh([[0, 0, 0], [0, 0, TILE_SIZE], [1, 0, 0]])
+    tie = _mesh([[0, 0.05, 0], [0, 0.05, TILE_SIZE], [0.5, 0.05, 0]])
+    masks = load_section_masks("flat")
+
+    plain = FakeContext()
+    render_section(Track(meshes=[mesh], track_mesh_index=0), SECTION_REGISTRY["flat"], plain, masks)
+    tied = FakeContext()
+    render_section(
+        Track(meshes=[mesh, tie], track_mesh_index=0, separate_tie=True, tie_mesh_index=1),
+        SECTION_REGISTRY["flat"], tied, masks,
+    )
+    # flat = 1 drawn tile x 2 views -> 2 extra rigid-tie models.
+    assert _add_count(tied) - _add_count(plain) == 2
+
+
+def test_tie_at_boundary_retiles_into_tie_and_track_segments():
+    mesh = _mesh([[0, 0, 0], [0, 0, TILE_SIZE], [1, 0, 0]])
+    tie = _mesh([[0, 0.05, 0], [0, 0.05, TILE_SIZE], [0.5, 0.05, 0]])
+    track_tie = _mesh([[0, 0.02, 0], [0, 0.02, TILE_SIZE], [0.5, 0.02, 0]])
+    track = Track(
+        meshes=[mesh, tie, track_tie], track_mesh_index=0,
+        separate_tie=True, tie_at_boundary=True, tie_mesh_index=1, track_tie_mesh_index=2,
+        tie_length=0.3 * TILE_SIZE,
+    )
+    ctx = FakeContext()
+    render_section(track, SECTION_REGISTRY["flat"], ctx, load_section_masks("flat"))
+    # The boundary retiling emits drawn models (rigid ties, deformed track-ties, track).
+    assert _add_count(ctx) > 0
+
+
+def test_tie_boundary_flags_exit_directions():
+    # Straight piece, view 0: entry and exit both heading 0 -> start tie, no end tie.
+    assert _tie_boundary_flags(TrackFlag.NONE, 0) == (True, False)
+    # 90-left exit shifts the end heading down one (view 3 -> end heading 2 = an end tie).
+    assert _tie_boundary_flags(TrackFlag.EXIT_90_DEG_LEFT, 3) == (False, True)
+    # 90-right exit shifts the end heading up one.
+    assert _tie_boundary_flags(TrackFlag.EXIT_90_DEG_RIGHT, 1) == (True, True)
+    # 180 exit (heading 0 -> 2).
+    assert _tie_boundary_flags(TrackFlag.EXIT_180_DEG, 0) == (True, True)
+    # 45-left only applies to diagonals; 45-right only to non-diagonals.
+    assert _tie_boundary_flags(TrackFlag.EXIT_45_DEG_LEFT | TrackFlag.DIAGONAL, 2) == (False, True)
+    assert _tie_boundary_flags(TrackFlag.EXIT_45_DEG_RIGHT, 1) == (True, True)
+
+
+def test_build_boundary_ties_handles_extrude_flags():
+    # Directly exercise the extrude-behind/in-front growth of the boundary tiling.
+    mesh = _mesh([[0, 0, 0], [0, 0, TILE_SIZE], [1, 0, 0]])
+    tie = _mesh([[0, 0.05, 0], [0, 0.05, TILE_SIZE], [0.5, 0.05, 0]])
+    track_tie = _mesh([[0, 0.02, 0], [0, 0.02, TILE_SIZE], [0.5, 0.02, 0]])
+    vm = ViewMask(
+        primary=np.zeros((1, 1), np.uint8), secondary=np.zeros((1, 1), np.uint8),
+        origin=(0, 0), masks=(), extrude_behind=True, extrude_in_front=True,
+    )
+    ctx = FakeContext()
+    builder = ctx.begin_render()
+    _build_boundary_ties(
+        builder, mesh, None, SECTION_REGISTRY["flat"], vm,
+        flat_shaded=False, is_mask=False, z_offset=0.0,
+        start_offset=_ORIGIN, end_offset=_ORIGIN,
+        tie_mesh=tie, track_tie_mesh=track_tie, tie_length=0.3 * TILE_SIZE,
+        view_angle=0, num=1, tile_length=TILE_SIZE,
+    )
+    assert _add_count(ctx) > 0
+
+
+def test_tie_at_boundary_silhouette_emits_occluders():
+    # The boundary tiling also drives the silhouette (mask) path without error.
+    mesh = _mesh([[0, 0, 0], [0, 0, TILE_SIZE], [1, 0, 0]])
+    tie = _mesh([[0, 0.05, 0], [0, 0.05, TILE_SIZE], [0.5, 0.05, 0]])
+    track_tie = _mesh([[0, 0.02, 0], [0, 0.02, TILE_SIZE], [0.5, 0.02, 0]])
+    track = Track(
+        meshes=[mesh, tie, track_tie], track_mesh_index=0, mask_mesh_index=0,
+        separate_tie=True, tie_at_boundary=True, tie_mesh_index=1, track_tie_mesh_index=2,
+        tie_length=0.3 * TILE_SIZE,
+    )
+    ctx = FakeContext()
+    render_section(
+        track, SECTION_REGISTRY["gentle_to_steep"], ctx,
+        load_section_masks("gentle_to_steep", occlusion=True),
+    )
+    assert _add_count(ctx, int(MeshFlag.MASK)) > 0  # silhouette occluders emitted
 
 
 def test_render_emits_ghost_end_caps():

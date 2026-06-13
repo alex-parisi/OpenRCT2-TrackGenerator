@@ -16,29 +16,20 @@ def _args(input_path, test=False, skip_render=False):
     return argparse.Namespace(input=input_path, test=test, skip_render=skip_render)
 
 
-def _patch_build_track(monkeypatch):
-    monkeypatch.setattr(cli, "load_track_meshes", lambda root: [])
-    monkeypatch.setattr(cli, "load_preview", lambda root: None)
-    monkeypatch.setattr(cli, "load_special_models", lambda root: {})
-    monkeypatch.setattr(
-        cli,
-        "build_track",
-        lambda root, meshes, preview, special_models: types.SimpleNamespace(units_per_tile=3.3),
-    )
-
-
 def _patch_common(monkeypatch, calls):
-    _patch_build_track(monkeypatch)
+    monkeypatch.setattr(
+        cli, "build_tracks", lambda root: [types.SimpleNamespace(units_per_tile=3.3)]
+    )
     monkeypatch.setattr(cli, "make_context", lambda lights, upt, test, root: ("ctx", upt, test))
     monkeypatch.setattr(cli, "output_directory_of", lambda root: "out-dir")
 
-    def fake_export_track(track, ctx, out, skip_render):
-        calls["export"] = {"ctx": ctx, "out": out, "skip_render": skip_render}
+    def fake_export_tracks(tracks, ctx, out, skip_render):
+        calls["export"] = {"n": len(tracks), "ctx": ctx, "out": out, "skip_render": skip_render}
 
     def fake_export_track_test(track, ctx):
         calls["export_test"] = {"ctx": ctx}
 
-    monkeypatch.setattr(cli, "export_track", fake_export_track)
+    monkeypatch.setattr(cli, "export_tracks", fake_export_tracks)
     monkeypatch.setattr(cli, "export_track_test", fake_export_track_test)
 
 
@@ -47,6 +38,7 @@ def test_render_full_export_path(monkeypatch):
     _patch_common(monkeypatch, calls)
     cli._render(_args("track.yaml", skip_render=True), {}, [])
     assert "export_test" not in calls
+    assert calls["export"]["n"] == 1
     assert calls["export"]["out"] == "out-dir"
     assert calls["export"]["skip_render"] is True
     assert calls["export"]["ctx"] == ("ctx", 3.3, False)

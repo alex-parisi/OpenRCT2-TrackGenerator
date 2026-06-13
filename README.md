@@ -21,13 +21,33 @@ deformed mesh is then a drop-in for the existing X7 render path.
 
 * `curves.py` — vectorized curve library (port of `track_sections.cpp`).
 * `deform.py` — vectorized mesh deformation (port of `track.cpp`'s `track_transform`).
-* `subpositions.py` — vehicle subposition tables, sampled from the same curves.
+* `groups.py` — section-group expansion (port of `write_track_type`).
+* `offsets.py` — `special_end_offsets` endpoint-offset table (port of `track.cpp`).
+* `subpositions.py` — vehicle subposition tables in OpenRCT2's discretized sprite encoding
+  (port of `subposition.cpp`); the rotation tables are embedded in `_sprite_rotations.py`.
 
-## Status: vertical slice
+## Status: maketrack parity
 
-This milestone ports six representative sections end-to-end to prove the pipeline:
-`flat`, `flat_to_gentle`, `gentle`, `gentle_to_steep`, `steep`, `small_turn_left`.
-Broad section coverage, masks, supports, and special inversions are later milestones.
+All **170** track sections are implemented (name-for-name with `track_sections.cpp`),
+alongside the rest of `maketrack`'s surface:
+
+* **Section groups** — list maketrack group names (`turns`, `gentle_slopes`,
+  `banked_sloped_turns`, …) in `sections`; they expand to the constituent pieces. Individual
+  section names still work too.
+* **Masks**, **supports** (base + banked posts), **lift-hill chains**, and
+  **special-mechanism** models (brakes/boosters/inversions).
+* **`special_end_offsets`** endpoint smoothing via an `offsets` table.
+* **Separate ties** (`separate_tie` / `tie_at_boundary`).
+* **`spritefile_in`/`spritefile_out` merge** — append rendered sprites into an existing
+  manifest (the fixed-global-image-index workflow).
+* **Multiple track variants per file** — a `tracks` array whose entries inherit the shared
+  config and override per-variant keys; each variant's `suffix` keeps sprite filenames
+  distinct in one merged manifest.
+* **Subposition tables** — `subpositions.py` emits OpenRCT2's discretized yaw/pitch/bank
+  sprite indices (not raw radians).
+
+`maketrack` and the separate `subposition` tool are both ported. The X7 renderer differs
+from RCTGen's IsoRender, so output is structurally — not pixel — identical.
 
 ## Output format
 
@@ -38,10 +58,14 @@ palette-indexed PNGs plus a manifest array of `{path, x, y, palette: "keep"}` en
 (addressed by array order), not a `.parkobj`. A full run writes:
 
 ```
-<output>/<id>.sprites.json        # the sprite manifest
-<output>/images/<section>_<n>.png # palette-indexed sprites (n = view 1..4)
-<output>/<id>.subpositions.json   # vehicle subposition tables (sidecar)
+<output>/<id>.sprites.json                      # the sprite manifest (or spritefile_out)
+<output>/images/<section><suffix>_<view>_<sub>.png  # palette-indexed sprites
+<output>/<id>.subpositions.json                 # discretized subposition tables (sidecar)
 ```
+
+The image directory (`sprite_directory`), an existing manifest to merge into
+(`spritefile_in`) and the output manifest (`spritefile_out`) are all configurable; `suffix`
+is empty unless set per track variant.
 
 Compile the sprites into a graphics file with OpenRCT2's CLI:
 

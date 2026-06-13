@@ -52,13 +52,20 @@ class SupportPost:
 
 
 def support_posts(
-    section: TrackSection, z_offset: float, support_spacing: float, pivot: float
+    section: TrackSection,
+    z_offset: float,
+    support_spacing: float,
+    pivot: float,
+    start_offset: NDArray[np.float64] | None = None,
+    end_offset: NDArray[np.float64] | None = None,
 ) -> list[SupportPost]:
     """Compute the support posts for ``section`` (``track.cpp:405-437``).
 
     ``num = round(length / support_spacing)`` posts (plus the closing one) are spaced
     evenly; the integer bank step at each (``-6..6``) interpolates entry->exit bank and
-    selects the post model. Returns one :class:`SupportPost` per placement.
+    selects the post model. ``start_offset``/``end_offset`` carry the ``special_end_offsets``
+    smoothing into the post placement (the C++ post loop reads the same blended track point).
+    Returns one :class:`SupportPost` per placement.
     """
     length = section.length
     num = max(1, int(np.floor(0.5 + length / support_spacing)))
@@ -76,8 +83,9 @@ def support_posts(
     exit_ = _bank(TrackFlag.EXIT_BANK_LEFT, TrackFlag.EXIT_BANK_RIGHT)
 
     distances = np.array([i * step for i in range(num + 1)], dtype=np.float64)
-    zero = np.zeros(3)
-    tp = get_track_point_array(section.curve, flags, z_offset, length, zero, zero, distances)
+    so = np.zeros(3) if start_offset is None else start_offset
+    eo = np.zeros(3) if end_offset is None else end_offset
+    tp = get_track_point_array(section.curve, flags, z_offset, length, so, eo, distances)
 
     posts: list[SupportPost] = []
     for i in range(num + 1):

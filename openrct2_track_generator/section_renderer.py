@@ -13,7 +13,7 @@ occlusion, the mask mesh's silhouette is rendered the same way and fed to the ca
 import numpy as np
 from openrct2_x7_renderer.constants import MeshFlag
 from openrct2_x7_renderer.mesh import Mesh
-from openrct2_x7_renderer.ray_trace import VIEWS, Context, FinalizedScene
+from openrct2_x7_renderer.ray_trace import VIEWS, Context, FinalizedScene, SceneBuilder
 from openrct2_x7_renderer.types import IndexedImage
 
 from .constants import (
@@ -26,9 +26,10 @@ from .constants import (
     SpecialModel,
     TrackFlag,
 )
-from .deform import deform_mesh
+from .deform import deform_mesh, get_track_point_array
 from .lift import CHAIN_PATTERNS, ChainPattern, apply_lift
 from .masks import ViewMask, carve
+from .offsets import set_offset
 from .supports import support_posts
 from .types import Track, TrackSection
 
@@ -38,6 +39,138 @@ _IDENTITY = np.eye(3, dtype=np.float64)
 _ORIGIN = np.zeros(3, dtype=np.float64)
 _GHOST = int(MeshFlag.GHOST)
 _MASK = int(MeshFlag.MASK)
+
+
+def _cc(v: np.ndarray) -> np.ndarray:
+    """change_coordinates: curve-space (x, y, z) -> render-space (z, y, x)."""
+    return v[::-1].copy()
+
+
+def _rigid_tie_transform(
+    section: TrackSection,
+    z_offset: float,
+    u: float,
+    start_offset: np.ndarray,
+    end_offset: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Placement (matrix, translation) for a rigid tie at arc-distance ``u`` (``track.cpp``).
+
+    The tie sits in the curve's moving frame: matrix columns are the change-coordinates'd
+    binormal/normal/tangent, translation is the change-coordinates'd position.
+    """
+    tp = get_track_point_array(
+        section.curve, section.flags, z_offset, section.length,
+        start_offset, end_offset, np.array([u], dtype=np.float64),
+    )
+    mat = np.column_stack((_cc(tp.binormal[0]), _cc(tp.normal[0]), _cc(tp.tangent[0])))
+    return mat, _cc(tp.position[0])
+
+
+def _tie_boundary_flags(flags: TrackFlag, view_angle: int) -> tuple[bool, bool]:
+    """Whether a tie sits at the section's start/end boundary for a view (``track.cpp:251-267``).
+
+    The entry heading is the view angle (turned one step for diagonals); the exit heading is
+    the entry adjusted by the section's exit-direction flags. A boundary gets a tie when its
+    heading is one of the two "tie" orientations (angle <= 1 at the start, > 1 at the end).
+    """
+    diag = bool(flags & (TrackFlag.DIAGONAL | TrackFlag.DIAGONAL_2))
+    start_angle = (view_angle + 1) % 4 if diag else view_angle
+    end_angle = start_angle
+    if flags & TrackFlag.EXIT_90_DEG_LEFT:
+        end_angle -= 1
+    elif flags & TrackFlag.EXIT_90_DEG_RIGHT:
+        end_angle += 1
+    elif flags & TrackFlag.EXIT_180_DEG:
+        end_angle += 2
+    elif (flags & TrackFlag.EXIT_45_DEG_LEFT) and diag:
+        end_angle -= 1
+    elif (flags & TrackFlag.EXIT_45_DEG_RIGHT) and not diag:
+        end_angle += 1
+    end_angle %= 4
+    return start_angle <= 1, end_angle > 1
+
+
+def _build_boundary_ties(
+    builder: SceneBuilder,
+    mesh: Mesh,
+    occluder: Mesh | None,
+    section: TrackSection,
+    view_mask: ViewMask,
+    *,
+    flat_shaded: bool,
+    is_mask: bool,
+    z_offset: float,
+    start_offset: np.ndarray,
+    end_offset: np.ndarray,
+    tie_mesh: Mesh,
+    track_tie_mesh: Mesh,
+    tie_length: float,
+    view_angle: int,
+    num: int,
+    tile_length: float,
+) -> None:
+    """Retile a section with ties at tile boundaries (``track.cpp:249-327``).
+
+    The section is re-divided so a tie sits at each boundary the entry/exit heading puts one
+    at (``start_tie`` / ``end_tie``), and a corrected scale absorbs the resulting length
+    change. Even segments place a rigid ``tie_mesh`` + a deformed ``track_tie_mesh`` over a
+    ``tie_length`` span; odd segments place the plain track over the between-tie span. (No
+    example track uses this mode, so it is a faithful structural port, not golden-validated;
+    alt track meshes and VIEW_MASK_END are not modelled, matching the unused C++ paths.)
+    """
+    sflag = _MASK if is_mask else 0
+    track_solid = occluder if (is_mask and occluder is not None) else mesh  # the track mesh
+    plate = mesh if is_mask else None  # the mask plate (silhouette only)
+
+    start_tie, end_tie = _tie_boundary_flags(section.flags, view_angle)
+
+    corrected_length = num * tile_length
+    if not start_tie:
+        corrected_length -= tie_length
+    if end_tie:
+        corrected_length += tie_length
+    corrected_scale = section.length / corrected_length
+    tie_len = corrected_scale * tie_length
+    inter_length = corrected_scale * (tile_length - tie_length)
+
+    offset = 0.0
+    nm = num
+    if view_mask.extrude_behind:
+        nm += 1
+        offset -= corrected_scale * tile_length
+    if view_mask.extrude_in_front:
+        nm += 1
+
+    def _deform(m: Mesh, off: float) -> Mesh:
+        return deform_mesh(
+            m, section, scale=corrected_scale, offset=off, track_length=section.length,
+            z_offset=z_offset, flat_shaded=flat_shaded,
+            start_offset=start_offset, end_offset=end_offset,
+        )
+
+    for i in range(2 * nm + 1):
+        is_tie = (i % 2 == 0) and (i != 0 or start_tie) and (i != 2 * nm or end_tie)
+        if is_tie:
+            # The rigid tie centres at the (unscaled) tie midpoint, matching track.cpp:298.
+            mat, trans = _rigid_tie_transform(
+                section, z_offset, offset + tie_length / 2.0, start_offset, end_offset
+            )
+            builder.add_model(tie_mesh, mat, trans, sflag)
+            builder.add_model(
+                _deform(track_tie_mesh, offset), _IDENTITY, _ORIGIN, sflag
+            )
+            offset += tie_len
+        elif i % 2 == 1:
+            # use_alt is always false here (the port has no alt track mesh).
+            builder.add_model(
+                _deform(track_solid, offset), _IDENTITY, _ORIGIN, sflag
+            )
+            if is_mask and plate is not None:
+                plate_off = offset - tie_len if start_tie else offset
+                builder.add_model(
+                    _deform(plate, plate_off), _IDENTITY, _ORIGIN, 0
+                )
+            offset += inter_length
 
 
 def _section_layout(mesh: Mesh, section: TrackSection) -> tuple[int, float, float]:
@@ -73,6 +206,13 @@ def _build_scene(
     rigid_special: tuple[Mesh, np.ndarray, np.ndarray] | None = None,
     base_mesh: Mesh | None = None,
     posts: list[tuple[Mesh, np.ndarray, np.ndarray]] | None = None,
+    start_offset: np.ndarray = _ORIGIN,
+    end_offset: np.ndarray = _ORIGIN,
+    tie_mesh: Mesh | None = None,
+    track_tie_mesh: Mesh | None = None,
+    tie_length: float = TILE_SIZE,
+    tie_at_boundary: bool = False,
+    view_angle: int = 0,
 ) -> FinalizedScene:
     """Tile ``mesh`` along the section with ghost end-caps + extrude/mask_end handling.
 
@@ -91,12 +231,14 @@ def _build_scene(
         copy = deform_mesh(
             mesh, section, scale=scale, offset=offset, track_length=section.length,
             z_offset=z_offset, flat_shaded=flat_shaded,
+            start_offset=start_offset, end_offset=end_offset,
         )
         builder.add_model(copy, _IDENTITY, _ORIGIN, flag)
         if with_occluder and occluder is not None:
             occ = deform_mesh(
                 occluder, section, scale=scale, offset=offset, track_length=section.length,
                 z_offset=z_offset, flat_shaded=flat_shaded,
+                start_offset=start_offset, end_offset=end_offset,
             )
             builder.add_model(occ, _IDENTITY, _ORIGIN, _MASK)
 
@@ -106,22 +248,38 @@ def _build_scene(
     if is_mask or not (view_mask.extrude_in_front or view_mask.mask_end):
         add(section.length, 0 if is_mask else _GHOST)
 
-    # The drawn copies (extended by one for each extrude flag / mask_end).
-    count = num + int(view_mask.extrude_behind) + int(view_mask.extrude_in_front)
-    count += int(view_mask.mask_end)
     sflag = _MASK if is_mask else 0
-    for i in range(count):
-        offset = (i - (1 if view_mask.extrude_behind else 0)) * length
-        ghost_last = (not is_mask) and view_mask.mask_end and (i + 1 == count)
-        add(offset, _GHOST if ghost_last else 0, with_occluder=is_mask)
-        # Per-tile support base (track.cpp:356-357): a curve-deformed model on its own
-        # upright frame, drawn with the track (occluder in the silhouette).
-        if base_mesh is not None and not ghost_last:
-            bcopy = deform_mesh(
-                base_mesh, section, scale=scale, offset=offset, track_length=section.length,
-                z_offset=z_offset, flat_shaded=flat_shaded, base=True,
-            )
-            builder.add_model(bcopy, _IDENTITY, _ORIGIN, sflag)
+    if tie_at_boundary and tie_mesh is not None and track_tie_mesh is not None:
+        _build_boundary_ties(
+            builder, mesh, occluder, section, view_mask,
+            flat_shaded=flat_shaded, is_mask=is_mask, z_offset=z_offset,
+            start_offset=start_offset, end_offset=end_offset,
+            tie_mesh=tie_mesh, track_tie_mesh=track_tie_mesh, tie_length=tie_length,
+            view_angle=view_angle, num=num, tile_length=length / scale,
+        )
+    else:
+        # The drawn copies (extended by one for each extrude flag / mask_end).
+        count = num + int(view_mask.extrude_behind) + int(view_mask.extrude_in_front)
+        count += int(view_mask.mask_end)
+        for i in range(count):
+            offset = (i - (1 if view_mask.extrude_behind else 0)) * length
+            ghost_last = (not is_mask) and view_mask.mask_end and (i + 1 == count)
+            add(offset, _GHOST if ghost_last else 0, with_occluder=is_mask)
+            # Per-tile support base (track.cpp:356-357): a curve-deformed model on its own
+            # upright frame, drawn with the track (occluder in the silhouette).
+            if base_mesh is not None and not ghost_last:
+                bcopy = deform_mesh(
+                    base_mesh, section, scale=scale, offset=offset, track_length=section.length,
+                    z_offset=z_offset, flat_shaded=flat_shaded, base=True,
+                    start_offset=start_offset, end_offset=end_offset,
+                )
+                builder.add_model(bcopy, _IDENTITY, _ORIGIN, sflag)
+            # Separate rigid tie at the tile centre (track.cpp:358-362).
+            if tie_mesh is not None and not ghost_last:
+                mat, trans = _rigid_tie_transform(
+                    section, z_offset, offset + 0.5 * length, start_offset, end_offset
+                )
+                builder.add_model(tie_mesh, mat, trans, sflag)
 
     # Special-mechanism mesh (brake/booster) tiled on top of the track by its own length
     # (track.cpp:381-400). Drawn for the visible render, an occluder for the silhouette.
@@ -133,6 +291,7 @@ def _build_scene(
             scopy = deform_mesh(
                 special_mesh, section, scale=sscale, offset=i * sstep,
                 track_length=section.length, z_offset=z_offset, flat_shaded=flat_shaded,
+                start_offset=start_offset, end_offset=end_offset,
             )
             builder.add_model(scopy, _IDENTITY, _ORIGIN, sflag)
 
@@ -210,18 +369,51 @@ def render_section(
     # Supports: per-tile base model + support posts, when the track enables supports and the
     # section permits them (track.cpp:356-357, 405-437). Posts whose bank model isn't supplied
     # are dropped (maketrack leaves them as empty meshes).
-    base_mesh: Mesh | None = None
-    posts: list[tuple[Mesh, np.ndarray, np.ndarray]] | None = None
-    if track.has_supports and not (section.flags & TrackFlag.NO_SUPPORTS):
-        base_mesh = track.special_models.get(SUPPORT_BASE_KEY)
+    supports_enabled = track.has_supports and not (section.flags & TrackFlag.NO_SUPPORTS)
+    base_mesh: Mesh | None = (
+        track.special_models.get(SUPPORT_BASE_KEY) if supports_enabled else None
+    )
+
+    def _resolve_posts(
+        start_off: np.ndarray, end_off: np.ndarray
+    ) -> list[tuple[Mesh, np.ndarray, np.ndarray]] | None:
+        if not supports_enabled:
+            return None
         resolved = [
             (track.special_models[p.model_key], p.matrix, p.translation)
-            for p in support_posts(section, z_offset, track.support_spacing, track.pivot)
+            for p in support_posts(
+                section, z_offset, track.support_spacing, track.pivot, start_off, end_off
+            )
             if p.model_key in track.special_models
         ]
-        posts = resolved or None
+        return resolved or None
+
+    # Separate ties: the rigid tie mesh (both modes) + the deformable track-tie mesh
+    # (boundary mode). Absent indices disable the respective tie path.
+    tie_mesh = (
+        track.meshes[track.tie_mesh_index]
+        if track.separate_tie and track.tie_mesh_index >= 0
+        else None
+    )
+    track_tie_mesh = (
+        track.meshes[track.track_tie_mesh_index]
+        if track.tie_at_boundary and track.track_tie_mesh_index >= 0
+        else None
+    )
+
+    # End offsets are per view angle. Without special_end_offsets they're zero for every
+    # angle, so the posts are identical and computed once; otherwise they're recomputed per
+    # angle from set_offset (track.cpp sets the same blend on the per-view post placement).
+    static_posts = None if track.special_end_offsets else _resolve_posts(_ORIGIN, _ORIGIN)
 
     for angle, view_mask, chain in angle_plan(track, section, view_masks):
+        if track.special_end_offsets:
+            start_off, end_off = set_offset(angle, section, track.offset_table)
+            posts = _resolve_posts(start_off, end_off)
+        else:
+            start_off = end_off = _ORIGIN
+            posts = static_posts
+
         silhouette: IndexedImage | None = None
         if track.mask_mesh_index >= 0 and view_mask.needs_silhouette:
             mask_mesh = track.meshes[track.mask_mesh_index]
@@ -230,6 +422,9 @@ def render_section(
                 flat_shaded=track.flat_shaded, is_mask=True, z_offset=z_offset,
                 occluder=track_mesh, special_mesh=special_mesh, special_length=special_length,
                 rigid_special=rigid_special, base_mesh=base_mesh, posts=posts,
+                start_offset=start_off, end_offset=end_off,
+                tie_mesh=tie_mesh, track_tie_mesh=track_tie_mesh, tie_length=track.tie_length,
+                tie_at_boundary=track.tie_at_boundary, view_angle=angle,
             )
             try:
                 silhouette = sil_scene.render_silhouette(VIEWS[angle])
@@ -241,6 +436,9 @@ def render_section(
             flat_shaded=track.flat_shaded, is_mask=False, z_offset=z_offset,
             special_mesh=special_mesh, special_length=special_length,
             rigid_special=rigid_special, base_mesh=base_mesh, posts=posts,
+            start_offset=start_off, end_offset=end_off,
+            tie_mesh=tie_mesh, track_tie_mesh=track_tie_mesh, tie_length=track.tie_length,
+            tie_at_boundary=track.tie_at_boundary, view_angle=angle,
         )
         try:
             full = scene.render_view(VIEWS[angle])

@@ -42,9 +42,13 @@ def _section_view_masks(track: Track, section: TrackSection) -> list[ViewMask]:
 
 
 def _sprite_names(track: Track, section: TrackSection, view_masks: list[ViewMask]) -> list[str]:
-    """Sprite filenames for a section, in angle-major then sub-sprite order."""
+    """Sprite filenames for a section, in angle-major then sub-sprite order.
+
+    The track's ``suffix`` (empty for single-track configs) is appended after the section
+    name, matching maketrack's per-track ``name`` suffix so variants don't collide.
+    """
     return [
-        f"{section.name}_{angle}_{sub}"
+        f"{section.name}{track.suffix}_{angle}_{sub}"
         for angle, view_mask, _chain in angle_plan(track, section, view_masks)
         for sub in range(len(view_mask.masks))
     ]
@@ -61,8 +65,15 @@ def expected_sprite_count(track: Track) -> int:
     )
 
 
-def _render_sprites(track: Track, context: Context, images_dir: Path) -> list[dict[str, Any]]:
-    """Render+carve every section and return the manifest entries (in emission order)."""
+def _render_sprites(
+    track: Track, context: Context, images_dir: Path, path_prefix: str
+) -> list[dict[str, Any]]:
+    """Render+carve every section and return the manifest entries (in emission order).
+
+    PNGs are written under ``images_dir``; each manifest ``path`` is ``path_prefix`` joined
+    to the filename (so the manifest stays relative to its own directory, as ``sprite build``
+    expects).
+    """
     images_dir.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
     for section in track.sections:
@@ -77,13 +88,27 @@ def _render_sprites(track: Track, context: Context, images_dir: Path) -> list[di
                 {
                     # write_png drops draw offsets, so carry them in the manifest,
                     # which is where `sprite build` reads them anyway.
-                    "path": f"{images_dir.name}/{filename}",
+                    "path": f"{path_prefix}/{filename}",
                     "x": int(image.x_offset),
                     "y": int(image.y_offset),
                     "palette": "keep",
                 }
             )
     return manifest
+
+
+def _resolve(output_directory: Path, path: str) -> Path:
+    """Resolve a configured manifest path against the output dir (absolute paths kept)."""
+    p = Path(path)
+    return p if p.is_absolute() else output_directory / p
+
+
+def _load_spritefile_in(path: Path) -> list[dict[str, Any]]:
+    """Load an existing sprite manifest array to append to (maketrack's ``spritefile_in``)."""
+    data = json.loads(path.read_text())
+    if not isinstance(data, list):
+        raise ValueError(f'spritefile_in "{path}" is not a JSON array')
+    return data
 
 
 def _write_subpositions(track: Track, output_directory: Path) -> Path:
@@ -95,30 +120,64 @@ def _write_subpositions(track: Track, output_directory: Path) -> Path:
     return path
 
 
-def export_track(
-    track: Track, context: Context, output_directory: Path | str, skip_render: bool = False
+def export_tracks(
+    tracks: list[Track],
+    context: Context,
+    output_directory: Path | str,
+    skip_render: bool = False,
 ) -> None:
-    """Render the track's sprites + manifest into ``output_directory``.
+    """Render one or more track variants into a single merged sprite manifest.
 
-    Writes ``<output>/images/<section>_<view>_<sub>.png`` (palette-indexed), a
-    ``<output>/<id>.sprites.json`` manifest for ``openrct2 sprite build``, and the
-    ``<id>.subpositions.json`` sidecar. ``skip_render`` is a no-op for tracks: there is
-    no separate packaging step to repeat, and the manifest's draw offsets can only be
-    recovered by rendering, so a prior run's outputs are simply left in place.
+    Each track is rendered (its ``suffix`` keeping variant filenames distinct) and its
+    sprites appended, in order, to one manifest — mirroring maketrack processing a ``tracks``
+    array into one spritefile. Shared output settings (``sprite_directory`` /
+    ``spritefile_in``/``out`` / ``id``) are taken from the first track. Writes
+    ``<output>/<sprite_dir>/<section><suffix>_<view>_<sub>.png`` (palette-indexed), the
+    manifest for ``openrct2 sprite build``, and one ``<id>.subpositions.json`` sidecar.
+    ``skip_render`` leaves any prior outputs in place (the draw offsets can only be recovered
+    by rendering, and there is no separate packaging step to repeat).
     """
     output_directory = Path(output_directory)
     if skip_render:
         log.info("skip_render: leaving existing sprites and manifest in place")
         return
+    if not tracks:
+        return
 
-    manifest = _render_sprites(track, context, output_directory / IMAGES_DIRNAME)
+    head = tracks[0]
+    sprite_dir = head.sprite_directory or IMAGES_DIRNAME
+    images_dir = output_directory / sprite_dir
 
-    manifest_path = output_directory / f"{track.id}.sprites.json"
+    # maketrack appends the rendered sprites to an existing manifest (spritefile_in) so they
+    # land at fixed global image indices; absent, we write a fresh standalone array.
+    manifest: list[dict[str, Any]] = []
+    if head.spritefile_in:
+        manifest = _load_spritefile_in(_resolve(output_directory, head.spritefile_in))
+    rendered_total = 0
+    for track in tracks:
+        rendered = _render_sprites(track, context, images_dir, sprite_dir)
+        manifest += rendered
+        rendered_total += len(rendered)
+
+    if head.spritefile_out:
+        manifest_path = _resolve(output_directory, head.spritefile_out)
+    else:
+        manifest_path = output_directory / f"{head.id}.sprites.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=4))
-    log.info("wrote %s (%d sprites)", manifest_path, len(manifest))
+    log.info(
+        "wrote %s (%d sprites, %d rendered from %d track(s))",
+        manifest_path, len(manifest), rendered_total, len(tracks),
+    )
 
-    _write_subpositions(track, output_directory)
+    _write_subpositions(head, output_directory)
+
+
+def export_track(
+    track: Track, context: Context, output_directory: Path | str, skip_render: bool = False
+) -> None:
+    """Render a single track's sprites + manifest (see :func:`export_tracks`)."""
+    export_tracks([track], context, output_directory, skip_render)
 
 
 def export_track_test(track: Track, context: Context, test_dir: Path | str = "test") -> None:
@@ -134,4 +193,5 @@ def export_track_test(track: Track, context: Context, test_dir: Path | str = "te
         log.info("Rendering track section %s", section.name)
         view_masks = _section_view_masks(track, section)
         images = render_section(track, section, context, view_masks)
-        write_png(combine_indexed_images(images, columns=2), test_dir / f"{section.name}.png")
+        out = test_dir / f"{section.name}{track.suffix}.png"
+        write_png(combine_indexed_images(images, columns=2), out)

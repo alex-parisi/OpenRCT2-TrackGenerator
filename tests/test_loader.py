@@ -188,3 +188,44 @@ def test_supports_config_parsed_and_scaled():
     assert track.has_supports is True
     assert track.support_spacing == 0.8 * TILE_SIZE
     assert track.pivot == 0.1 * TILE_SIZE
+
+
+def test_tie_defaults_off():
+    track = build_track(_config(), _meshes())
+    assert track.separate_tie is False
+    assert track.tie_at_boundary is False
+    assert track.tie_mesh_index == -1
+    assert track.track_tie_mesh_index == -1
+    assert track.tie_length == TILE_SIZE
+
+
+def test_separate_tie_flag_parsed():
+    track = build_track(
+        _config(flags=["separate_tie"], tie_length=0.5, tie_mesh_index=1), _meshes(2)
+    )
+    assert track.separate_tie is True
+    assert track.tie_at_boundary is False
+    assert track.tie_length == 0.5 * TILE_SIZE
+    assert track.tie_mesh_index == 1
+
+
+def test_tie_at_boundary_implies_separate_tie():
+    track = build_track(
+        _config(flags=["tie_at_boundary"], tie_mesh_index=1, track_tie_mesh_index=2), _meshes(3)
+    )
+    assert track.tie_at_boundary is True
+    assert track.separate_tie is True
+    assert track.track_tie_mesh_index == 2
+
+
+def test_tie_mesh_index_out_of_range_raises():
+    with pytest.raises(LoadError, match="tie_mesh_index"):
+        build_track(_config(flags=["separate_tie"], tie_mesh_index=5), _meshes(1))
+
+
+def test_lift_offset_defaults_to_thirteen():
+    assert build_track(_config(), _meshes()).lift_offset == 13
+
+
+def test_lift_offset_parsed():
+    assert build_track(_config(lift_offset=20), _meshes()).lift_offset == 20
