@@ -33,6 +33,7 @@ class _TrackModalBase(RenderModalBase):
 
     def _prepare(self, context, payload) -> None:
         self._lights = lights_from_items(context.scene.tg_track.lights)
+        self._dither = context.scene.tg_track.dither
 
 
 class TG_OT_test_render(_TrackModalBase):
@@ -49,7 +50,7 @@ class TG_OT_test_render(_TrackModalBase):
 
     def _render(self, payload) -> None:
         track = payload
-        ctx = make_context(self._lights, track.units_per_tile, True)
+        ctx = make_context(self._lights, track.units_per_tile, True, dither=self._dither)
         export_track_test(track, ctx, self._tmp)
         if track.sections:
             self._png = os.path.join(self._tmp, f"{track.sections[0].name}.png")
@@ -86,7 +87,7 @@ class TG_OT_export(_TrackModalBase):
 
     def _render(self, payload) -> None:
         track = payload
-        ctx = make_context(self._lights, track.units_per_tile, False)
+        ctx = make_context(self._lights, track.units_per_tile, False, dither=self._dither)
         export_track(track, ctx, self._out)
 
     def _on_success(self, context):

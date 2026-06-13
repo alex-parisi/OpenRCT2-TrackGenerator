@@ -33,6 +33,7 @@ class TG_PT_track(Panel):
         layout.prop(tt, "scale_preset")
         if tt.scale_preset == "CUSTOM":
             layout.prop(tt, "units_per_tile")
+        layout.prop(tt, "dither")
 
         box = layout.box()
         box.label(text="Identity", icon="INFO")
