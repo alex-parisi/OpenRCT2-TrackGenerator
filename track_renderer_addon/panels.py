@@ -3,6 +3,7 @@ role + per-material region."""
 
 import bpy
 from bpy.types import Panel, UIList
+from openrct2_object_common.blender.bake import draw_bake
 
 
 class TG_UL_sections(UIList):
@@ -116,6 +117,7 @@ def _draw_material_settings(layout, ms):
     col.prop(ms, "no_bleed")
     col.prop(ms, "flat_shaded")
     layout.prop(ms, "texture")
+    draw_bake(layout.column(align=True), ms)
 
     col = layout.column(align=True)
     col.label(text="Shading")

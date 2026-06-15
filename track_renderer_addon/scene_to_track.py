@@ -18,6 +18,7 @@ import os
 
 import bpy
 import numpy as np
+from openrct2_object_common.blender.bake import bake_materials
 from openrct2_object_common.blender.mesh_extract import (
     SceneError,
     extract_mesh,
@@ -43,6 +44,11 @@ _REGION_MAP = {
 _LOAD_ROT = rotate_y(-0.5 * np.pi)
 
 
+# Material -> baked Texture map for the current build, populated by
+# build_config_and_meshes before extraction (see bake.bake_materials).
+_baked_textures: dict = {}
+
+
 def _material_from_bpy(bmat) -> Material:
     m, s = material_base(bmat, prop_attr="tg_material", region_map=_REGION_MAP)
     if s is None:
@@ -53,11 +59,15 @@ def _material_from_bpy(bmat) -> Material:
         m.flags |= MaterialFlag.IS_VISIBLE_MASK
     if s.flat_shaded:
         m.flags |= MaterialFlag.IS_FLAT_SHADED
+    # Texture sources, in priority order: explicit image > baked procedural nodes.
     if s.texture is not None:
         path = bpy.path.abspath(s.texture.filepath_from_user() or s.texture.filepath)
         if path and os.path.exists(path):
             m.texture = load_texture(path)
             m.flags |= MaterialFlag.HAS_TEXTURE
+    if not (m.flags & MaterialFlag.HAS_TEXTURE) and bmat in _baked_textures:
+        m.texture = _baked_textures[bmat]
+        m.flags |= MaterialFlag.HAS_TEXTURE
     return m
 
 
@@ -87,6 +97,16 @@ def build_config_and_meshes(context):
     scene = context.scene
     tt = scene.tg_track
     depsgraph = context.evaluated_depsgraph_get()
+
+    # Bake any procedural-node materials to textures up front (main thread, Cycles),
+    # then feed them into extraction via _material_from_bpy. Re-assigned each call.
+    bake_objs = [
+        obj
+        for obj in scene.objects
+        if obj.type == "MESH" and obj.tg_object.role != "IGNORE"
+    ]
+    global _baked_textures
+    _baked_textures = bake_materials(context, bake_objs, prop_attr="tg_material")
 
     track_mesh: Mesh | None = None
     mask_mesh: Mesh | None = None
